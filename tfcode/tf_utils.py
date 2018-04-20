@@ -31,6 +31,9 @@ from tensorflow.python.ops import variable_scope
 sys.path.insert(0, '../slim')
 from preprocessing import inception_preprocessing as ip
 import random as rd
+import copy
+import os
+import scipy.misc
 
 resnet_v2_50 = resnet_v2.resnet_v2_50
 
@@ -318,7 +321,10 @@ def copy_feed_dict_to_namespace(feed_dict,m):
 def add_elem_datapool(elem, m):
   m.rl_datapool.append(elem)
   if len(m.rl_datapool)>m.rl_datapool_size:
-    del m.rl_datapool.pop[0]
+    #del m.rl_datapool[0]
+    m.rl_datapool.pop(0)
+  print 'len of datapool = '+str(len(m.rl_datapool))+', total size = '+str(sys.getsizeof(m.rl_datapool))+' bytes'
+    
 
 def rl_sample_action(cur_eps, model_action, m):
   #action = np.zeros(model_action.shape)
@@ -337,6 +343,146 @@ def rl_get_rand_fact(cur_step,m):
 def run_copying_ops(sess,copying_ops):
   for op in copying_ops:
     sess.run(op)
+
+#in progress
+def inference_test_elem(sess,m,e,init_env_state,dagger_sample_bn_false,rng_action,dirpath,name_prefix):    
+    if not os.path.exists(dirpath):
+      os.makedirs(dirpath)
+
+    input = e.get_common_data()
+    input = e.pre_common_data(input)
+    feed_dict  = prepare_feed_dict(m.input_tensors['common'], input)
+    if dagger_sample_bn_false:
+      feed_dict[m.train_ops['batch_norm_is_training_op']] = False
+    common_data = sess.run(m.train_ops['common'], feed_dict=feed_dict)
+
+    states = []
+    state_features = []
+    state_targets = []
+    net_state_to_input = []
+    step_data_cache = []
+    executed_actions = []
+    rewards = []
+    action_sample_wts = []
+    states.append(init_env_state)
+
+    net_state = sess.run(m.train_ops['init_state'], feed_dict=feed_dict)
+    net_state = dict(zip(m.train_ops['state_names'], net_state))
+    net_state_to_input.append(net_state)
+    #Tri
+    j = 0
+    f = e.get_features(states[j], j)
+    f = e.pre_features(f)
+    f.update(net_state)
+    f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
+    state_features.append(f)
+    
+    feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
+    optimal_action = e.get_optimal_action(states[j], j)
+    for x, v in zip(m.train_ops['common'], common_data):
+      feed_dict[x] = v
+    if dagger_sample_bn_false:
+      feed_dict[m.train_ops['batch_norm_is_training_op']] = False
+    
+    #temporary
+    #run_copying_ops(sess,m.copying_ops)
+    for j in range(0,m.rl_num_explore_steps):
+      jstr = ("%03d"%j)
+      for im_ind in range(len(init_env_state)):
+        im_ind_str = ("%02d"%im_ind)
+        img_name = dirpath+"/"+name_prefix+"_"+im_ind_str+"_"+jstr+".jpg"
+        scipy.misc.imsave(img_name, e.exploring_vis[im_ind]*1.0)
+      #f = e.get_features(states[j], j)
+      #f = e.pre_features(f)
+      #f.update(net_state)
+      #f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
+      #state_features.append(f)
+
+      #feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
+      #optimal_action = e.get_optimal_action(states[j], j)
+      #for x, v in zip(m.train_ops['common'], common_data):
+      #  feed_dict[x] = v
+      #if dagger_sample_bn_false:
+      #  feed_dict[m.train_ops['batch_norm_is_training_op']] = False
+      outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
+                       m.train_ops['step_data_cache'],
+                       m.train_ops['updated_state'],
+                       m.train_ops['outputs'],m.action_logits_op], feed_dict=feed_dict)
+      action_probs = outs[0]
+      sample_gt_prob = outs[1]
+      step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
+      net_state = outs[3]
+      action_logits = outs[5]
+      if hasattr(e, 'update_state'):
+        outputs = outs[4]
+        outputs = dict(zip(m.train_ops['output_names'], outputs))
+        e.update_state(outputs, j)
+      state_targets.append(e.get_targets(states[j], j))
+
+      #if j < num_steps-1:
+      # Sample from action_probs and optimal action.
+      action, action_sample_wt = sample_action(
+          rng_action, action_probs, optimal_action, sample_gt_prob,
+          m.sample_action_type, m.sample_action_combine_type)
+      #next_state, reward = e.take_action(states[j], action, j)
+      #Tri
+      action_tri = np.argmax(action_logits,axis=-1)
+
+      #n_step = sess.run(global_step)
+      #cur_eps = rl_get_rand_fact(n_step,m)
+      #action_taken = rl_sample_action(cur_eps, action_tri, m)
+      action_taken = action_tri
+      #pdb.set_trace()
+      next_state_tri, reward_tri = e.take_action_and_explore(states[j],action_taken)
+      executed_actions.append(action)   #old code, needs to be updated
+      states.append(next_state_tri)
+      rewards.append(reward_tri)
+      action_sample_wts.append(action_sample_wt)
+      net_state = dict(zip(m.train_ops['state_names'], net_state))
+      net_state_to_input.append(net_state)
+      #reordered from the top, preparing the next feed_dict
+      #temporarily backup the old variable for testing (this var is not neccessary in the new rl framework)
+      #optimal_action_prev = optimal_action
+      #new_datapool_elem = [optimal_action]
+      #new_datapool_elem = [feed_dict]
+      #new_datapool_elem.append(feed_dict)
+      f = e.get_features(states[j+1], j+1)
+      f = e.pre_features(f)
+      f.update(net_state)
+      f['step_number'] = np.ones((1,1,1), dtype=np.int32)*(j+1)
+      state_features.append(f)
+
+      feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
+      optimal_action = e.get_optimal_action(states[j+1], j+1)
+      for x, v in zip(m.train_ops['common'], common_data):
+        feed_dict[x] = v
+      if dagger_sample_bn_false:
+        feed_dict[m.train_ops['batch_norm_is_training_op']] = False
+  
+  
+
+def inference_test(sess,obj,m,dagger_sample_bn_false,rng_action,n_step):
+  #pdb.set_trace()
+  #e1 = copy.deepcopy(m.e1)
+  #e2 = copy.deepcopy(m.e2)
+  #init_env_state1 = copy.deepcopy(m.init_env_state1)
+  #init_env_state2 = copy.deepcopy(m.init_env_state2)
+  dirpath = "test_maps_b32_debug"
+  if not os.path.exists(dirpath):
+    os.makedirs(dirpath)
+  n_step_str = ("%05d" % n_step)
+
+  rng_data = copy.deepcopy(m.rng_data)
+  pdb.set_trace()
+  for eind in range(4):
+    e = obj.sample_env(rng_data)
+    init_env_state = e.reset(rng_data)
+    inference_test_elem(sess,m,e,init_env_state,dagger_sample_bn_false,rng_action,dirpath+"/env"+str(eind),"env"+str(eind)+"_"+n_step_str)
+
+  #pdb.set_trace()
+  #inference_test_elem(sess,m,e2,init_env_state2,dagger_sample_bn_false,dirpath+"/env2","env2_"+n_step_str)
+   
+  
 
 def train_step_custom_online_sampling(sess, train_op, global_step,
                                       train_step_kwargs, mode='train'):
@@ -420,7 +566,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       feed_dict[m.train_ops['batch_norm_is_training_op']] = False
     
     #temporary
-    run_copying_ops(sess,m.copying_ops)
+    #run_copying_ops(sess,m.copying_ops)
     for j in range(0,m.rl_num_explore_steps):
       #f = e.get_features(states[j], j)
       #f = e.pre_features(f)
@@ -459,9 +605,13 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       action_tri = np.argmax(action_logits,axis=-1)
 
       n_step = sess.run(global_step)
+      #save map images to test if the network learned something
+      if np.mod(n_step,5000)==0:
+        inference_test(sess,obj,m,dagger_sample_bn_false,rng_action,n_step)
+
       cur_eps = rl_get_rand_fact(n_step,m)
       action_taken = rl_sample_action(cur_eps, action_tri, m)
-
+      #pdb.set_trace()
       next_state_tri, reward_tri = e.take_action_and_explore(states[j],action_taken)
       executed_actions.append(action)   #old code, needs to be updated
       states.append(next_state_tri)
@@ -470,7 +620,11 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       net_state = dict(zip(m.train_ops['state_names'], net_state))
       net_state_to_input.append(net_state)
       #reordered from the top, preparing the next feed_dict
-      new_datapool_elem = [feed_dict]
+      #temporarily backup the old variable for testing (this var is not neccessary in the new rl framework)
+      #optimal_action_prev = optimal_action
+      new_datapool_elem = [optimal_action]
+      #new_datapool_elem = [feed_dict]
+      new_datapool_elem.append(feed_dict)
       f = e.get_features(states[j+1], j+1)
       f = e.pre_features(f)
       f.update(net_state)
@@ -487,7 +641,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       cloned_feed_dict = copy_feed_dict_to_namespace(feed_dict,m)
       #pdb.set_trace()
       new_datapool_elem.append(cloned_feed_dict)
-      new_datapool_elem.append(action_tri)
+      new_datapool_elem.append(action_taken[:,np.newaxis])
       new_datapool_elem.append(reward_tri)
       #m.rl_datapool.append(new_datapool_elem)
       add_elem_datapool(new_datapool_elem,m)
@@ -499,16 +653,18 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       #pick an elemen from datapool
       picked_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)] 
       #prepare target (y) values 
-      dic1_train = picked_pool_elem[0]
-      dic2_train = picked_pool_elem[1]
-      reward_train = picked_pool_elem[3]
-      action_train = picked_pool_elem[2]
-      pdb.set_trace()
+      dic1_train = picked_pool_elem[1]
+      dic2_train = picked_pool_elem[2]
+      reward_train = picked_pool_elem[4]
+      action_train = picked_pool_elem[3]
+      action_tmp = picked_pool_elem[0]
+      #pdb.set_trace()
       out_target = sess.run(m.cloned_action_logits_op,feed_dict=dic2_train)
       #pdb.set_trace()
-      target = reward_train+m.rl_discount_factor*np.max(out_target)
-      dic1_train[m.input_tensors['train']['target']] = target
+      target = reward_train+m.rl_discount_factor*np.max(out_target,axis=-1)
+      dic1_train[m.input_tensors['train']['target']] = target[:,np.newaxis]
       dic1_train[m.input_tensors['train']['action_one']] = action_train
+      dic1_train[m.input_tensors['train']['action']] = action_tmp[:,np.newaxis,:]
 
       if np.mod(n_step, train_display_interval) == 0:
         total_loss, np_global_step, summary, print_summary = sess.run(

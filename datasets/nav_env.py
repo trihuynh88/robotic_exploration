@@ -982,6 +982,14 @@ class NavigationEnv(GridWorld, Building):
         goal_nodes=goal_nodes, goal_node_ids=goal_node_ids, dist_to_goal=dists,
         perturbs=perturbs, goal_perturbs=end_perturbs, history=history,
         target_class=target_class, history_frames=[])
+
+    #Tri
+    #mark the initial positions as explored
+    self.unexplored = np.tile(self.traversible,(self.task_params.batch_size,1,1))
+    #pdb.set_trace()
+    self.exploring_vis = np.tile(self.traversible[:,:,np.newaxis],(self.task_params.batch_size,1,1,3))
+
+    self.mark_explored(start_node_ids)
     return start_node_ids
 
   def take_action(self, current_node_ids, action, step_number):
@@ -998,6 +1006,33 @@ class NavigationEnv(GridWorld, Building):
       rewards.append(reward)
     return new_node_ids, rewards
 
+  def mark_explored(self,node_ids):
+    """mark the current positions as explored"""
+    #pdb.set_trace()
+    new_nodes = [list(self.task.id_to_nodes[x]) for x in node_ids]
+    new_nodes = np.asarray(new_nodes)
+    xyt = self.to_actual_xyt_vec(new_nodes)
+    m = self.unexplored.shape[1]
+    n = self.unexplored.shape[2]
+    for i in range(xyt.shape[0]):
+        #y,x = np.ogrid[-xyt[i,1]:m-xyt[i,1], -xyt[i,0]:n-xyt[i,0]]
+        #mask = x*x+y*y <= (self.task_params.explore_radius*self.task_params.explore_radius)
+        #self.unexplored[i][mask] = 0
+        ystart = xyt[i,1]-self.task_params.explore_radius
+        yend = xyt[i,1]+self.task_params.explore_radius
+        xstart = xyt[i,0]-self.task_params.explore_radius
+        xend = xyt[i,0]+self.task_params.explore_radius
+        y,x = np.ogrid[np.maximum(0,ystart):np.minimum(m,yend),np.maximum(0,xstart):np.minimum(n,xend)]
+        y = np.round(y)
+        x = np.round(x)
+        y = y.astype(int)
+        x = x.astype(int)
+        #pdb.set_trace()
+        self.unexplored[i,y,x] = 0
+        #mark the vis map for exploring steps
+        self.exploring_vis[i,y,x,2] = 0
+    
+
   def take_action_and_explore(self,current_node_ids,action):
     """Take action and explore the visited location, mark the explored areas, return
        new positions and the explored rewards."""
@@ -1012,10 +1047,22 @@ class NavigationEnv(GridWorld, Building):
     ind_same = (new_node_ids==current_node_ids)
     rewards[ind_same] = -self.task_params.explore_radius*self.task_params.explore_radius
     for i in range(xyt.shape[0]):
-        y,x = np.ogrid[-xyt[i,1]:m-xyt[i,1], -xyt[i,0]:n-xyt[i,0]]
-        mask = x*x+y*y <= self.task_params.explore_radius
-        rewards[i] = (self.unexplored[i][mask]==1).sum()
-        self.unexplored[i][mask] = 0
+        #y,x = np.ogrid[-xyt[i,1]:m-xyt[i,1], -xyt[i,0]:n-xyt[i,0]]
+        #mask = x*x+y*y <= (self.task_params.explore_radius*self.task_params.explore_radius)
+        #rewards[i] = (self.unexplored[i][mask]==1).sum()
+        #self.unexplored[i][mask] = 0
+        ystart = xyt[i,1]-self.task_params.explore_radius
+        yend = xyt[i,1]+self.task_params.explore_radius
+        xstart = xyt[i,0]-self.task_params.explore_radius
+        xend = xyt[i,0]+self.task_params.explore_radius
+        y,x = np.ogrid[np.maximum(0,ystart):np.minimum(m,yend),np.maximum(0,xstart):np.minimum(n,xend)]
+        y = np.round(y)
+        x = np.round(x)
+        y = y.astype(int)
+        x = x.astype(int)
+        rewards[i] = (self.unexplored[i,y,x]==1).sum()
+        self.unexplored[i,y,x] = 0
+        self.exploring_vis[i,y,x,2] = 0
     return new_node_ids, rewards
 
   def get_optimal_action(self, current_node_ids, step_number):
@@ -1077,7 +1124,9 @@ class VisualNavigationEnv(NavigationEnv):
       self.task_params.readout_maps_scales,
       self.task_params.map_resize_method)
 
-    self.unexplored = np.tile(self.traversible,(self.task_params.batch_size,1,1))
+    #self.unexplored = np.tile(self.traversible,(self.task_params.batch_size,1,1))
+    #pdb.set_trace()
+    #self.exploring_vis = np.tile(self.traversible[:,:,np.newaxis],(self.task_params.batch_size,1,1,3))
     tt.toc(log_at=1, log_str='VisualNavigationEnv __init__: ')
 
   def get_weight(self):
@@ -1482,6 +1531,7 @@ class BuildingMultiplexer():
     else:
       building_id = rng.choice(self.num_buildings,
                                p=self.building_sampling_weights)
+    pdb.set_trace()
     return self.buildings[building_id]
 
   def pre(self, inputs):

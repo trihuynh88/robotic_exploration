@@ -430,6 +430,15 @@ def _train(args):
         #clonemodel(m)
         #set_copying_ops(m)
         #set_tmp_params(m)
+        #generating data for testing the learning process during training
+        #obj = train_step_kwargs['obj']
+        rng_data = train_step_kwargs['rng_data']
+        #m.e1 = obj.sample_env(rng_data)
+        #m.init_env_state1 = m.e1.reset(rng_data)
+        #m.e2 = obj.sample_env(rng_data)
+        #m.init_env_state2 = m.e2.reset(rng_data)
+        m.rng_data = deepcopy(rng_data)
+        
 
         additional_args = {}
         final_loss = slim.learning.train(

@@ -41,6 +41,7 @@ import tfcode.cmp_summary as cmp_s
 from tfcode import tf_utils
 from tensorflow.python.framework import ops
 from copy import deepcopy
+import pdb
 
 value_iteration_network = cu.value_iteration_network
 rotate_preds            = cu.rotate_preds
@@ -84,8 +85,13 @@ def copy_variable_to_graph(org_instance, to_graph, namespace,
     if namespace != '':
         new_name = (namespace + '/' +
                     org_instance.name[:org_instance.name.index(':')])
+        new_name_full = namespace + '/' + org_instance.name
     else:
         new_name = org_instance.name[:org_instance.name.index(':')]
+        new_name_full = org_instance.name
+
+    if new_name_full in copied_variables:
+        return to_graph.get_tensor_by_name(copied_variables[new_name_full].name)
  
     #Get the collections that the new instance needs to be added to.
     #The new collections will also be a part of the given namespace,
@@ -279,12 +285,16 @@ def get_copied(original, graph, copied_variables={}, namespace=""):
     return graph.as_graph_element(new_name, allow_tensor=True,
                                   allow_operation=True)
 
-def clonemodel(m):
+def clone_vars(m):
   """cloning all the variables & operations to a new graph."""
   #pdb.set_trace()
   namespace = "cloned"
   #cloned_vars = []
-  cloned_vars = {}
+  #if m.cloned_vars is not None:
+  if hasattr(m, 'cloned_vars'):
+    cloned_vars = m.cloned_vars
+  else:
+    cloned_vars = {}
   #cloned_graph = tf.Graph()_
   #cloned_graph = tf.get_default_graph()
   graph = tf.get_default_graph()
@@ -292,7 +302,46 @@ def clonemodel(m):
   #vars_to_restore = slim.get_variables_to_restore()
   vars_to_restore = slim.get_model_variables()
   #pdb.set_trace()
-  for var in vars_to_restore:
+  for var in vars_to_restore[-3:]:
+    #new_var = tf.contrib.copy_graph.copy_variable_to_graph(var,cloned_graph,namespace)
+    #cloned_vars.append(new_var)
+    ###new_var = copy_variable_to_graph(var,cloned_graph,namespace,cloned_vars,fix_shape=True)
+    new_var = copy_variable_to_graph(var,graph,namespace,cloned_vars,fix_shape=True)
+
+  #pdb.set_trace()
+  #print "finished cloning variables"
+  #cloned_action_logits_op = tf.contrib.copy_graph.copy_op_to_graph(m.action_logits_op,cloned_graph,cloned_vars,namespace) 
+  #cloned_action_logits_op = copy_to_graph(m.action_logits_op,cloned_graph,cloned_vars,namespace)
+  #cloned_action_logits_op = copy_to_graph(m.action_logits_op,graph,cloned_vars,namespace)
+  #print "finished cloning op"
+  #m.cloned_graph = cloned_graph
+  m.cloned_vars = cloned_vars
+  #m.cloned_action_logits_op = cloned_action_logits_op
+  m.cloned_namespace = namespace
+  print "finished cloning model ----------------------"
+  #pdb.set_trace()
+
+
+def clonemodel(m):
+  """cloning all the variables & operations to a new graph."""
+  #pdb.set_trace()
+  namespace = "cloned"
+  #cloned_vars = []
+  #cloned_vars = {}
+  #if m.cloned_vars is not None:
+  if hasattr(m, 'cloned_vars'):
+    cloned_vars = m.cloned_vars
+  else:
+    cloned_vars = {}
+  #cloned_graph = tf.Graph()_
+  #cloned_graph = tf.get_default_graph()
+  graph = tf.get_default_graph()
+  #graph = tf.Graph()
+  #vars_to_restore = slim.get_variables_to_restore()
+  vars_to_restore = slim.get_model_variables()
+  #pdb.set_trace()
+  #for var in vars_to_restore:
+  for var in vars_to_restore[-1:]:
     #new_var = tf.contrib.copy_graph.copy_variable_to_graph(var,cloned_graph,namespace)
     #cloned_vars.append(new_var)
     ###new_var = copy_variable_to_graph(var,cloned_graph,namespace,cloned_vars,fix_shape=True)
@@ -317,6 +366,7 @@ def set_copying_ops(m):
   for var in model_vars:
     new_name = (m.cloned_namespace + '/' + var.name)
     if new_name in m.cloned_vars.keys():
+      #pdb.set_trace()
       new_var = m.cloned_vars[new_name]
       copy_op = new_var.assign(var)
       copying_ops.append(copy_op)
@@ -325,7 +375,7 @@ def set_copying_ops(m):
 
 def set_tmp_params(m):
   m.rl_num_explore_steps = 100
-  m.rl_datapool_size = 100000
+  m.rl_datapool_size = 1000
   m.rl_datapool = []
   m.rl_discount_factor = 0.9
   m.rl_rand_act_prob_start = 1.0
@@ -532,6 +582,15 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
       out.confs_probs = [tf.nn.sigmoid(x) for x in out.confs_logits]
   return out
 
+def init_fn_tri(sess,m):
+  pdb.set_trace()
+  print "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+  assign_fn = slim.assign_from_checkpoint_fn(args.solver.pretrained_path,
+                                                 m.vision_ops.vars_to_restore)
+  assign_fn(sess)
+  for op in m.copying_ops:
+    sess.run(op) 
+
 def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   assert(args.arch.multi_scale), 'removed support for old single scale code.'
   # Set up the model.
@@ -559,6 +618,21 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
     # Load variables from snapshot if needed.
     if args.solver.pretrained_path is not None:
+      #pdb.set_trace()
+      #clone_vars(m)
+      #set_copying_ops(m)
+
+      def init_fn_tri2(s):
+        pdb.set_trace()
+        print "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+        assign_fn = slim.assign_from_checkpoint_fn(args.solver.pretrained_path,
+                                                 m.vision_ops.vars_to_restore)
+        assign_fn(s)
+        for op in m.copying_ops:
+          s.run(op)
+
+      #m.init_fn = lambda s: init_fn_tri(s,m)
+      #m.init_fn = init_fn_tri2
       m.init_fn = slim.assign_from_checkpoint_fn(args.solver.pretrained_path,
                                                  m.vision_ops.vars_to_restore)
 
@@ -645,8 +719,11 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
         conf = tf.reshape(conf, shape=sh)
 
         sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
-        goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
-        to_concat = [occupancy, conf, goal]
+        #Tri: remove goal inputs when perform exploration task
+        #goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
+        #to_concat = [occupancy, conf, goal]
+        #pdb.set_trace()
+        to_concat = [occupancy, conf]
 
         if previous_value_op is not None:
           to_concat.append(previous_value_op)
@@ -828,14 +905,18 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   m.summary_ops = {
       summary_mode: _add_summaries(m, args, summary_mode,
                                    args.summary.arop_full_summary_iters)}
-
   #Tri
   clonemodel(m)
   set_copying_ops(m)
   set_tmp_params(m)  
-
+  
+  #pdb.set_trace()
   m.init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
+
+  #pdb.set_trace()
   m.saver_op = tf.train.Saver(keep_checkpoint_every_n_hours=4,
-                              write_version=tf.train.SaverDef.V2)
+                              write_version=tf.train.SaverDef.V2)#,var_list=slim.get_variables_to_restore(exclude=['cloned']))
+
+
   return m
