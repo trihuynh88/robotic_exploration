@@ -341,7 +341,7 @@ def clonemodel(m):
   vars_to_restore = slim.get_model_variables()
   #pdb.set_trace()
   #for var in vars_to_restore:
-  for var in vars_to_restore[-1:]:
+  for var in vars_to_restore:
     #new_var = tf.contrib.copy_graph.copy_variable_to_graph(var,cloned_graph,namespace)
     #cloned_vars.append(new_var)
     ###new_var = copy_variable_to_graph(var,cloned_graph,namespace,cloned_vars,fix_shape=True)
@@ -677,6 +677,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   with tf.name_scope('check_size'):
     is_single_step = tf.equal(tf.unstack(tf.shape(m.ego_map_ops[0]), num=5)[1], 1)
 
+  #debug
+  m.is_single_step = is_single_step
+
   fr_ops = []; value_ops = [];
   fr_intermediate_ops = []; value_intermediate_ops = [];
   crop_value_ops = [];
@@ -849,13 +852,12 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   #                          ewma_decay=ewma_decay)
 
   #Tri
-  m.reg_loss_op, m.data_loss_op, m.total_loss_op, m.acc_ops = \
-    rl_compute_losses_multi_or(m.action_logits_op,m.input_tensors['train']['action'],
-                            m.input_tensors['train']['action_one'],m.input_tensors['train']['target'], weights=weight,
+  m.reg_loss_op, m.data_loss_op, m.total_loss_op = \
+    rl_compute_losses_multi_or(m.action_logits_op,
+                            m.input_tensors['train']['action_one'],m.input_tensors['train']['target'],
                             num_actions=task_params.num_actions,
                             data_loss_wt=args.solver.data_loss_wt,
-                            reg_loss_wt=args.solver.reg_loss_wt,
-                            ewma_decay=ewma_decay)
+                            reg_loss_wt=args.solver.reg_loss_wt)
   
   if args.arch.readout_maps:
     m.total_loss_op = m.total_loss_op + m.readout_maps_loss_op

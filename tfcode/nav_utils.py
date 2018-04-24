@@ -81,25 +81,25 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
 
 
 #Tri
-def rl_compute_losses_multi_or(logits, actions_one_hot, actions_one,target, weights=None,
+def rl_compute_losses_multi_or(logits, actions_one,target,
                             num_actions=-1, data_loss_wt=1., reg_loss_wt=1.,
-                            ewma_decay=0.99, reg_loss_op=None):
+                            reg_loss_op=None):
   assert(num_actions > 0), 'num_actions must be specified and must be > 0.'
   #pdb.set_trace()
   with tf.name_scope('loss'):
-    if weights is None:
-      weight = tf.ones_like(actions_one_hot, dtype=tf.float32, name='weight')
+    #if weights is None:
+    #  weight = tf.ones_like(actions_one_hot, dtype=tf.float32, name='weight')
     
-    actions_one_hot = tf.cast(tf.reshape(actions_one_hot, [-1, num_actions],
-                                         're_actions_one_hot'), tf.float32)
-    weights = tf.reduce_sum(tf.reshape(weights, [-1, num_actions], 're_weight'),
-                            reduction_indices=1)
-    total = tf.reduce_sum(weights)
+    #actions_one_hot = tf.cast(tf.reshape(actions_one_hot, [-1, num_actions],
+    #                                     're_actions_one_hot'), tf.float32)
+    #weights = tf.reduce_sum(tf.reshape(weights, [-1, num_actions], 're_weight'),
+    #                        reduction_indices=1)
+    #total = tf.reduce_sum(weights)
     #total = logits.shape[0]
 
-    action_prob = tf.nn.softmax(logits)
-    action_prob = tf.reduce_sum(tf.multiply(action_prob, actions_one_hot),
-                                reduction_indices=1)
+    #action_prob = tf.nn.softmax(logits)
+    #action_prob = tf.reduce_sum(tf.multiply(action_prob, actions_one_hot),
+    #                            reduction_indices=1)
     #example_loss = -tf.log(tf.maximum(tf.constant(1e-4), action_prob))
 
     actions_one = tf.cast(tf.reshape(actions_one, [-1, 1],
@@ -123,15 +123,15 @@ def rl_compute_losses_multi_or(logits, actions_one_hot, actions_one,target, weig
     else:
       total_loss_op = data_loss_wt*data_loss_op
 
-    is_correct = tf.cast(tf.greater(action_prob, 0.5, name='pred_class'), tf.float32)
-    acc_op = tf.reduce_sum(is_correct*weights) / total
+    #is_correct = tf.cast(tf.greater(action_prob, 0.5, name='pred_class'), tf.float32)
+    #acc_op = tf.reduce_sum(is_correct*weights) / total
 
-    ewma_acc_op = moving_averages.weighted_moving_average(
-        acc_op, ewma_decay, weight=total, name='ewma_acc')
+    #ewma_acc_op = moving_averages.weighted_moving_average(
+    #    acc_op, ewma_decay, weight=total, name='ewma_acc')
 
-    acc_ops = [ewma_acc_op]
+    #acc_ops = [ewma_acc_op]
 
-  return reg_loss_op, data_loss_op, total_loss_op, acc_ops
+  return reg_loss_op, data_loss_op, total_loss_op
 
 
 

@@ -1531,7 +1531,7 @@ class BuildingMultiplexer():
     else:
       building_id = rng.choice(self.num_buildings,
                                p=self.building_sampling_weights)
-    pdb.set_trace()
+    #pdb.set_trace()
     return self.buildings[building_id]
 
   def pre(self, inputs):

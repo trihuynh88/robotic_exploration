@@ -183,11 +183,15 @@ def _summary_readout_maps(m, num_steps, arop_full_summary_iters):
 def _add_summaries(m, args, summary_mode, arop_full_summary_iters):
   task_params = args.navtask.task_params
   
-  summarize_ops = [m.lr_op, m.global_step_op, m.sample_gt_prob_op] + \
-      m.loss_ops + m.acc_ops
-  summarize_names = ['lr', 'global_step', 'sample_gt_prob_op'] + \
-      m.loss_ops_names + ['acc_{:d}'.format(i) for i in range(len(m.acc_ops))]
-  to_aggregate = [0, 0, 0] + [1]*len(m.loss_ops_names) + [1]*len(m.acc_ops)
+  #summarize_ops = [m.lr_op, m.global_step_op, m.sample_gt_prob_op] + m.loss_ops
+  summarize_ops = [m.lr_op, m.global_step_op] + m.loss_ops
+  #    m.loss_ops + m.acc_ops
+  #summarize_names = ['lr', 'global_step', 'sample_gt_prob_op'] + m.loss_ops_names
+  summarize_names = ['lr', 'global_step'] + m.loss_ops_names
+  #    m.loss_ops_names + ['acc_{:d}'.format(i) for i in range(len(m.acc_ops))]
+  #to_aggregate = [0, 0, 0] + [1]*len(m.loss_ops_names) 
+  to_aggregate = [0, 0] + [1]*len(m.loss_ops_names)
+  #              + [1]*len(m.acc_ops)
 
   scope_name = 'summary'
   with tf.name_scope(scope_name):
