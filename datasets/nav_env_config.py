@@ -78,7 +78,7 @@ def nav_env_base_config():
                           num_steps=40,
                           num_actions=4,
                           #batch_size=4, 
-                          batch_size=64,
+                          batch_size=32,
                           building_seed=0,
                           num_goals=1,
                           img_height=None,

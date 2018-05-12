@@ -992,6 +992,45 @@ class NavigationEnv(GridWorld, Building):
     self.mark_explored(start_node_ids)
     return start_node_ids
 
+  def reset_n_nodes(self, rngs, n_num):
+    rng = rngs[0]; rng_perturb = rngs[1];
+    nodes = self.task.nodes
+    tp = self.task_params
+
+    start_node_ids, goal_node_ids, dists, target_class = \
+        _nav_env_reset_helper(tp.type, rng, self.task.nodes, n_num,
+                              self.task.gtG, tp.max_dist, tp.num_steps,
+                              tp.num_goals, tp.data_augment,
+                              **(self.task.reset_kwargs))
+
+    start_nodes = [tuple(nodes[_,:]) for _ in start_node_ids]
+    goal_nodes = [[tuple(nodes[_,:]) for _ in __] for __ in goal_node_ids]
+    data_augment = tp.data_augment
+    perturbs = _gen_perturbs(rng_perturb, n_num,
+                             (tp.num_steps+1)*tp.num_goals,
+                             data_augment.lr_flip, data_augment.delta_angle,
+                             data_augment.delta_xy, data_augment.structured)
+    perturbs = np.array(perturbs) # batch x steps x 4
+    end_perturbs = perturbs[:,-(tp.num_goals):,:]*1 # fixed perturb for the goal.
+    perturbs = perturbs[:,:-(tp.num_goals),:]*1
+
+    history = -np.ones((n_num, tp.num_steps*tp.num_goals), dtype=np.int32)
+    self.episode = utils.Foo(
+        start_nodes=start_nodes, start_node_ids=start_node_ids,
+        goal_nodes=goal_nodes, goal_node_ids=goal_node_ids, dist_to_goal=dists,
+        perturbs=perturbs, goal_perturbs=end_perturbs, history=history,
+        target_class=target_class, history_frames=[])
+
+    #Tri
+    #mark the initial positions as explored
+    self.unexplored = np.tile(self.traversible,(n_num,1,1))
+    #pdb.set_trace()
+    self.exploring_vis = np.tile(self.traversible[:,:,np.newaxis],(n_num,1,1,3))
+
+    self.mark_explored(start_node_ids)
+    return start_node_ids
+
+
   def take_action(self, current_node_ids, action, step_number):
     """In addition to returning the action, also returns the reward that the
     agent receives."""
@@ -1185,6 +1224,226 @@ class VisualNavigationEnv(NavigationEnv):
 
   def pre_common_data(self, inputs):
     return inputs
+
+  #remove the dependency on batch_size to allow for more dynamic input size
+  def get_features_tri(self, current_node_ids, step_number):
+    num_imgs = len(current_node_ids)
+    task_params = self.task_params
+    goal_number = step_number / self.task_params.num_steps
+    end_nodes = self.task.nodes[self.episode.goal_node_ids[goal_number],:]*1
+    current_nodes = self.task.nodes[current_node_ids,:]*1
+    end_perturbs = self.episode.goal_perturbs[:,goal_number,:][:,np.newaxis,:]
+    perturbs = self.episode.perturbs
+    target_class = self.episode.target_class
+
+    # Append to history.
+    self.episode.history[:,step_number] = np.array(current_node_ids)
+
+    # Render out the images from current node.
+    outs = {}
+
+    if self.task_params.outputs.images:
+      imgs_all = []
+      imgs = self.render_nodes([tuple(x) for x in current_nodes],
+                               perturb=perturbs[:,step_number,:])
+      imgs_all.append(imgs)
+      aux_delta_thetas = self.task_params.aux_delta_thetas
+      for i in range(len(aux_delta_thetas)):
+        imgs = self.render_nodes([tuple(x) for x in current_nodes],
+                                 perturb=perturbs[:,step_number,:],
+                                 aux_delta_theta=aux_delta_thetas[i])
+        imgs_all.append(imgs)
+      imgs_all = np.array(imgs_all) # A x B x H x W x C
+      imgs_all = np.transpose(imgs_all, axes=[1,0,2,3,4])
+      imgs_all = np.expand_dims(imgs_all, axis=1) # B x N x A x H x W x C
+      if task_params.num_history_frames > 0:
+        if step_number == 0:
+          # Append the same frame 4 times
+          for i in range(task_params.num_history_frames+1):
+            self.episode.history_frames.insert(0, imgs_all*1.)
+        self.episode.history_frames.insert(0, imgs_all)
+        self.episode.history_frames.pop()
+        imgs_all_with_history = np.concatenate(self.episode.history_frames, axis=2)
+      else:
+        imgs_all_with_history = imgs_all
+      outs['imgs'] = imgs_all_with_history # B x N x A x H x W x C
+
+    if self.task_params.outputs.node_ids:
+      outs['node_ids'] = np.array(current_node_ids).reshape((-1,1,1))
+      outs['perturbs'] = np.expand_dims(perturbs[:,step_number, :]*1., axis=1)
+
+    if self.task_params.outputs.analytical_counts:
+      assert(self.task_params.modalities == ['depth'])
+      d = image_pre(outs['imgs']*1., self.task_params.modalities)
+      cm = get_camera_matrix(self.task_params.img_width,
+                             self.task_params.img_height,
+                             self.task_params.img_fov)
+      XYZ = get_point_cloud_from_z(100./d[...,0], cm)
+      XYZ = make_geocentric(XYZ*100., self.robot.sensor_height,
+                                      self.robot.camera_elevation_degree)
+      for i in range(len(self.task_params.analytical_counts.map_sizes)):
+        non_linearity = self.task_params.analytical_counts.non_linearity[i]
+        count, isvalid = bin_points(XYZ*1.,
+                                    map_size=self.task_params.analytical_counts.map_sizes[i],
+                                    xy_resolution=self.task_params.analytical_counts.xy_resolution[i],
+                                    z_bins=self.task_params.analytical_counts.z_bins[i])
+        assert(count.shape[2] == 1), 'only works for n_views equal to 1.'
+        count = count[:,:,0,:,:,:]
+        isvalid = isvalid[:,:,0,:,:,:]
+        if non_linearity == 'none':
+          None
+        elif non_linearity == 'min10':
+          count = np.minimum(count, 10.)
+        elif non_linearity == 'sqrt':
+          count = np.sqrt(count)
+        else:
+          logging.fatal('Undefined non_linearity.')
+        outs['analytical_counts_{:d}'.format(i)] = count
+
+    # Compute the goal location in the cordinate frame of the robot.
+    if self.task_params.outputs.rel_goal_loc:
+      if self.task_params.type[:14] != 'to_nearest_obj':
+        loc, _, _, theta = self.get_loc_axis(current_nodes,
+                                             delta_theta=self.task.delta_theta,
+                                             perturb=perturbs[:,step_number,:])
+        goal_loc, _, _, goal_theta = self.get_loc_axis(end_nodes,
+                                                       delta_theta=self.task.delta_theta,
+                                                       perturb=end_perturbs[:,0,:])
+        r_goal, t_goal = _get_relative_goal_loc(goal_loc, loc, theta)
+
+        rel_goal_loc = np.concatenate((r_goal*np.cos(t_goal), r_goal*np.sin(t_goal),
+                                       np.cos(goal_theta-theta),
+                                       np.sin(goal_theta-theta)), axis=1)
+        outs['rel_goal_loc'] = np.expand_dims(rel_goal_loc, axis=1)
+      elif self.task_params.type[:14] == 'to_nearest_obj':
+        rel_goal_loc = np.zeros((num_imgs, 1,
+                                 len(self.task_params.semantic_task.class_map_names)),
+                                dtype=np.float32)
+        for i in range(num_imgs):
+          t = target_class[i]
+          rel_goal_loc[i,0,t] = 1.
+        outs['rel_goal_loc'] = rel_goal_loc
+
+    # Location on map to plot the trajectory during validation.
+    if self.task_params.outputs.loc_on_map:
+      loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+                                                     delta_theta=self.task.delta_theta,
+                                                     perturb=perturbs[:,step_number,:])
+      outs['loc_on_map'] = np.expand_dims(loc, axis=1)
+
+    # Compute gt_dist to goal
+    if self.task_params.outputs.gt_dist_to_goal:
+      gt_dist_to_goal = np.zeros((len(current_node_ids), 1), dtype=np.float32)
+      for i, n in enumerate(current_node_ids):
+        gt_dist_to_goal[i,0] = self.episode.dist_to_goal[goal_number][i][n]
+      outs['gt_dist_to_goal'] = np.expand_dims(gt_dist_to_goal, axis=1)
+
+    # Free space in front of you, map and goal as images.
+    if self.task_params.outputs.ego_maps:
+      loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+                                                     delta_theta=self.task.delta_theta,
+                                                     perturb=perturbs[:,step_number,:])
+      maps = generate_egocentric_maps(self.task.scaled_maps,
+                                      self.task_params.map_scales,
+                                      self.task_params.map_crop_sizes, loc,
+                                      x_axis, y_axis, theta)
+
+      for i in range(len(self.task_params.map_scales)):
+        outs['ego_maps_{:d}'.format(i)] = \
+            np.expand_dims(np.expand_dims(maps[i], axis=1), axis=-1)
+
+    if self.task_params.outputs.readout_maps:
+      loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+                                                     delta_theta=self.task.delta_theta,
+                                                     perturb=perturbs[:,step_number,:])
+      maps = generate_egocentric_maps(self.task.readout_maps_scaled,
+                                      self.task_params.readout_maps_scales,
+                                      self.task_params.readout_maps_crop_sizes,
+                                      loc, x_axis, y_axis, theta)
+      for i in range(len(self.task_params.readout_maps_scales)):
+        outs['readout_maps_{:d}'.format(i)] = \
+            np.expand_dims(np.expand_dims(maps[i], axis=1), axis=-1)
+
+    # Images for the goal.
+    if self.task_params.outputs.ego_goal_imgs:
+      if self.task_params.type[:14] != 'to_nearest_obj': 
+        loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+                                                       delta_theta=self.task.delta_theta,
+                                                       perturb=perturbs[:,step_number,:])
+        goal_loc, _, _, _ = self.get_loc_axis(end_nodes,
+                                              delta_theta=self.task.delta_theta,
+                                              perturb=end_perturbs[:,0,:])
+        rel_goal_orientation = np.mod(
+            np.int32(current_nodes[:,2:] - end_nodes[:,2:]), self.task_params.n_ori)
+        goal_dist, goal_theta = _get_relative_goal_loc(goal_loc, loc, theta)
+        goals = generate_goal_images(self.task_params.map_scales,
+                                     self.task_params.map_crop_sizes,
+                                     self.task_params.n_ori, goal_dist,
+                                     goal_theta, rel_goal_orientation)
+        for i in range(len(self.task_params.map_scales)):
+          outs['ego_goal_imgs_{:d}'.format(i)] = np.expand_dims(goals[i], axis=1)
+
+      elif self.task_params.type[:14] == 'to_nearest_obj':
+        for i in range(len(self.task_params.map_scales)):
+          num_classes = len(self.task_params.semantic_task.class_map_names)
+          outs['ego_goal_imgs_{:d}'.format(i)] = np.zeros((num_imgs, 1,
+                                                           self.task_params.map_crop_sizes[i],
+                                                           self.task_params.map_crop_sizes[i],
+                                                           self.task_params.goal_channels))
+        for i in range(num_imgs):
+          t = target_class[i]
+          for j in range(len(self.task_params.map_scales)):
+            outs['ego_goal_imgs_{:d}'.format(j)][i,:,:,:,t] = 1.
+
+    # Incremental locs and theta (for map warping), always in the original scale
+    # of the map, the subequent steps in the tf code scale appropriately.
+    # Scaling is done by just multiplying incremental_locs appropriately.
+    if self.task_params.outputs.egomotion:
+      if step_number == 0:
+        # Zero Ego Motion
+        incremental_locs = np.zeros((num_imgs, 1, 2), dtype=np.float32)
+        incremental_thetas = np.zeros((num_imgs, 1, 1), dtype=np.float32)
+      else:
+        previous_nodes = self.task.nodes[self.episode.history[:,step_number-1], :]*1
+        loc, _, _, theta = self.get_loc_axis(current_nodes,
+                                             delta_theta=self.task.delta_theta,
+                                             perturb=perturbs[:,step_number,:])
+        previous_loc, _, _, previous_theta = self.get_loc_axis(
+            previous_nodes, delta_theta=self.task.delta_theta,
+            perturb=perturbs[:,step_number-1,:])
+
+        incremental_locs_ = np.reshape(loc-previous_loc, [num_imgs, 1, -1])
+
+        t = -np.pi/2+np.reshape(theta*1, [num_imgs, 1, -1])
+        incremental_locs = incremental_locs_*1
+        incremental_locs[:,:,0] = np.sum(incremental_locs_ *
+                                         np.concatenate((np.cos(t), np.sin(t)),
+                                                        axis=-1), axis=-1)
+        incremental_locs[:,:,1] = np.sum(incremental_locs_ *
+                                         np.concatenate((np.cos(t+np.pi/2),
+                                                         np.sin(t+np.pi/2)),
+                                                        axis=-1), axis=-1)
+        incremental_thetas = np.reshape(theta-previous_theta,
+                                        [num_imgs, 1, -1])
+      outs['incremental_locs'] = incremental_locs
+      outs['incremental_thetas'] = incremental_thetas
+
+    if self.task_params.outputs.visit_count:
+      # Output the visit count for this state, how many times has the current
+      # state been visited, and how far in the history was the last visit
+      # (except this one)
+      visit_count = np.zeros((num_imgs, 1), dtype=np.int32)
+      last_visit = -np.ones((num_imgs, 1), dtype=np.int32)
+      if step_number >= 1:
+        h = self.episode.history[:,:(step_number)]
+        visit_count[:,0] = np.sum(h == np.array(current_node_ids).reshape([-1,1]),
+                                  axis=1)
+        last_visit[:,0] = np.argmax(h[:,::-1] == np.array(current_node_ids).reshape([-1,1]),
+                                    axis=1) + 1
+        last_visit[visit_count == 0] = -1 # -1 if not visited.
+      outs['visit_count'] = np.expand_dims(visit_count, axis=1)
+      outs['last_visit'] = np.expand_dims(last_visit, axis=1)
+    return outs
 
 
   def get_features(self, current_node_ids, step_number):
@@ -1446,6 +1705,7 @@ class VisualNavigationEnv(NavigationEnv):
 class BuildingMultiplexer():
   def __init__(self, args, task_number):
     params = vars(args)
+    #pdb.set_trace()
     for k in params.keys():
       setattr(self, k, params[k])
     self.task_number = task_number
@@ -1462,6 +1722,7 @@ class BuildingMultiplexer():
 
   def _pick_data(self, task_number):
     logging.error('Input Building Names: %s', self.building_names)
+    print 'task_number = '+str(task_number)
     self.flip = [np.mod(task_number / len(self.building_names), 2) == 1]
     id = np.mod(task_number, len(self.building_names))
     self.building_names = [self.building_names[id]]

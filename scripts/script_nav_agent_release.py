@@ -400,10 +400,27 @@ def _setup_args(config_name, logdir):
 def _train(args):
   #pdb.set_trace()
   container_name = ""
+  #tmp setting TRI
+  args.solver.max_steps = 500000
+  args.solver.steps_per_decay = 10000
+  args.solver.initial_learning_rate = 1e-6
+  args.navtask.task_params.batch_size = 32
 
+  #pdb.set_trace()
   R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
   m = utils.Foo()
   m.tf_graph = tf.Graph()
+
+  #Tri
+  #add a cloned building object for checking the exploration result during training
+  m.cloned_obj = R()
+  m.batch_size = args.navtask.task_params.batch_size
+  m.train_type = 0
+  m.is_first_step = True
+  m.save_pic_step = 10000
+  m.save_pic_count = 0
+  m.save_reward_step = 500
+  m.save_reward_count = 0
 
   config = tf.ConfigProto()
   config.device_count['GPU'] = 1
@@ -439,7 +456,6 @@ def _train(args):
         #m.init_env_state2 = m.e2.reset(rng_data)
         m.rng_data = deepcopy(rng_data)
         
-
         additional_args = {}
         final_loss = slim.learning.train(
             train_op=m.train_op,
@@ -471,7 +487,12 @@ def _test(args):
   m.tf_graph = tf.Graph()
 
   rng_data_seed = 0; rng_action_seed = 0;
+  #R = lambda: nav_env.get_multiplexer_class(args.navtask, rng_data_seed)
+  #Tri tmp
+  args.navtask.building_names = ['area1']
   R = lambda: nav_env.get_multiplexer_class(args.navtask, rng_data_seed)
+  m.cloned_obj = R()
+
   with m.tf_graph.as_default():
     with tf.container(container_name):
       m = args.setup_to_run(
@@ -493,6 +514,10 @@ def _test(args):
 
       last_checkpoint = None
       reported = False
+
+      rng_data = train_step_kwargs['rng_data']
+      m.rng_data = deepcopy(rng_data)
+ 
       while True:
         last_checkpoint_ = None
         while last_checkpoint_ is None:
@@ -507,8 +532,9 @@ def _test(args):
                      time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()),
                      last_checkpoint)
 
-        if (args.control.only_eval_when_done == False or 
-            checkpoint_iter >= args.solver.max_steps):
+        #if (args.control.only_eval_when_done == False or 
+        #    checkpoint_iter >= args.solver.max_steps):
+        if True:
           start = time.time()
           logging.info('Starting evaluation at %s using checkpoint %s.', 
                        time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()),
@@ -526,10 +552,10 @@ def _test(args):
             vals, _ = tf_utils.train_step_custom_online_sampling(
                 sess, None, m.global_step_op, train_step_kwargs,
                 mode=args.control.test_mode)
-            should_stop = False
+            should_stop = True
 
-            if checkpoint_iter >= args.solver.max_steps: 
-              should_stop = True
+            #if checkpoint_iter >= args.solver.max_steps: 
+            #  should_stop = True
 
             if should_stop:
               break

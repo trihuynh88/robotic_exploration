@@ -341,7 +341,7 @@ def clonemodel(m):
   vars_to_restore = slim.get_model_variables()
   #pdb.set_trace()
   #for var in vars_to_restore:
-  for var in vars_to_restore:
+  for var in vars_to_restore[-1:]:
     #new_var = tf.contrib.copy_graph.copy_variable_to_graph(var,cloned_graph,namespace)
     #cloned_vars.append(new_var)
     ###new_var = copy_variable_to_graph(var,cloned_graph,namespace,cloned_vars,fix_shape=True)
@@ -374,73 +374,74 @@ def set_copying_ops(m):
   m.copying_ops = copying_ops
 
 def set_tmp_params(m):
-  m.rl_num_explore_steps = 100
-  m.rl_datapool_size = 1000
+  m.rl_num_explore_steps = 500
+  m.rl_datapool_size = 10000
   m.rl_datapool = []
-  m.rl_discount_factor = 0.9
+  m.rl_discount_factor = 0.99
   m.rl_rand_act_prob_start = 1.0
   m.rl_rand_act_prob_end = 0.1
-  m.rl_rand_act_anneal_time = 5000
-  m.rl_target_net_update_freq = 1000
+  m.rl_rand_act_anneal_time = 50000
+  m.rl_target_net_update_freq = 5000
+  m.rl_replay_start_size = 1000
 
 def _inputs(problem):
   # Set up inputs.
   with tf.name_scope('inputs'):
     inputs = []
     inputs.append(('orig_maps', tf.float32, 
-                   (problem.batch_size, 1, None, None, 1)))
+                   (None, 1, None, None, 1)))
     inputs.append(('goal_loc', tf.float32, 
-                   (problem.batch_size, problem.num_goals, 2)))
+                   (None, problem.num_goals, 2)))
     common_input_data, _ = tf_utils.setup_inputs(inputs)
 
     inputs = []
     if problem.input_type == 'vision':
       # Multiple images from an array of cameras.
       inputs.append(('imgs', tf.float32, 
-                     (problem.batch_size, None, len(problem.aux_delta_thetas)+1,
+                     (None, None, len(problem.aux_delta_thetas)+1,
                       problem.img_height, problem.img_width,
                       problem.img_channels)))
     elif problem.input_type == 'analytical_counts':
       for i in range(len(problem.map_crop_sizes)):
         inputs.append(('analytical_counts_{:d}'.format(i), tf.float32, 
-                      (problem.batch_size, None, problem.map_crop_sizes[i],
+                      (None, None, problem.map_crop_sizes[i],
                        problem.map_crop_sizes[i], problem.map_channels)))
 
     if problem.outputs.readout_maps: 
       for i in range(len(problem.readout_maps_crop_sizes)):
         inputs.append(('readout_maps_{:d}'.format(i), tf.float32, 
-                      (problem.batch_size, None,
+                      (None, None,
                        problem.readout_maps_crop_sizes[i],
                        problem.readout_maps_crop_sizes[i],
                        problem.readout_maps_channels)))
 
     for i in range(len(problem.map_crop_sizes)):
       inputs.append(('ego_goal_imgs_{:d}'.format(i), tf.float32, 
-                    (problem.batch_size, None, problem.map_crop_sizes[i],
+                    (None, None, problem.map_crop_sizes[i],
                      problem.map_crop_sizes[i], problem.goal_channels)))
       for s in ['sum_num', 'sum_denom', 'max_denom']:
         inputs.append(('running_'+s+'_{:d}'.format(i), tf.float32,
-                       (problem.batch_size, 1, problem.map_crop_sizes[i],
+                       (None, 1, problem.map_crop_sizes[i],
                         problem.map_crop_sizes[i], problem.map_channels)))
 
     inputs.append(('incremental_locs', tf.float32, 
-                   (problem.batch_size, None, 2)))
+                   (None, None, 2)))
     inputs.append(('incremental_thetas', tf.float32, 
-                   (problem.batch_size, None, 1)))
+                   (None, None, 1)))
     inputs.append(('step_number', tf.int32, (1, None, 1)))
-    inputs.append(('node_ids', tf.int32, (problem.batch_size, None,
+    inputs.append(('node_ids', tf.int32, (None, None,
                                           problem.node_ids_dim)))
-    inputs.append(('perturbs', tf.float32, (problem.batch_size, None,
+    inputs.append(('perturbs', tf.float32, (None, None,
                                             problem.perturbs_dim)))
     
     # For plotting result plots
-    inputs.append(('loc_on_map', tf.float32, (problem.batch_size, None, 2)))
-    inputs.append(('gt_dist_to_goal', tf.float32, (problem.batch_size, None, 1)))
+    inputs.append(('loc_on_map', tf.float32, (None, None, 2)))
+    inputs.append(('gt_dist_to_goal', tf.float32, (None, None, 1)))
 
     step_input_data, _ = tf_utils.setup_inputs(inputs)
 
     inputs = []
-    inputs.append(('action', tf.int32, (problem.batch_size, None, problem.num_actions)))
+    inputs.append(('action', tf.int32, (None, None, problem.num_actions)))
     #Tri
     inputs.append(('action_one', tf.int32, (None, 1)))
     inputs.append(('target',tf.float32, (None, 1)))
@@ -507,6 +508,11 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
                         is_training, batch_norm_is_training_op, num_maps,
                         split_maps=True):
   # Hit image with a resnet.
+  #imgs_shape = imgs.get_shape().as_list()
+  #test
+  #input_batch_size = tf.placeholder(tf.uint16, name="input_batch_size")
+  num_imgs = tf.shape(imgs)[0]
+
   n_views = len(task_params.aux_delta_thetas) + 1
   out = utils.Foo()
 
@@ -522,7 +528,8 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
   # Reshape into nice things so that these can be accumulated over time steps
   # for faster backprop.
   sh_before = x.get_shape().as_list()
-  out.encoder_output = tf.reshape(x, shape=[task_params.batch_size, -1, n_views] + sh_before[1:])
+  #out.encoder_output = tf.reshape(x, shape=[task_params.batch_size, -1, n_views] + sh_before[1:])
+  out.encoder_output = tf.reshape(x, shape=[num_imgs, -1, n_views] + sh_before[1:])
   x = tf.reshape(out.encoder_output, shape=[-1] + sh_before[1:])
 
   # Add a layer to reduce dimensions for a fc layer.
@@ -568,7 +575,8 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
 
   # Reshape x the right way.
   sh = x.get_shape().as_list()
-  x = tf.reshape(x, shape=[task_params.batch_size, -1] + sh[1:])
+  #x = tf.reshape(x, shape=[task_params.batch_size, -1] + sh[1:])
+  x = tf.reshape(x, shape=[num_imgs, -1] + sh[1:])
   out.deconv_output = x
 
   # Separate out the map and the confidence predictions, pass the confidence
@@ -594,6 +602,7 @@ def init_fn_tri(sess,m):
 def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   assert(args.arch.multi_scale), 'removed support for old single scale code.'
   # Set up the model.
+  #pdb.set_trace()
   tf.set_random_seed(args.solver.seed)
   task_params = args.navtask.task_params
 
@@ -735,6 +744,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
       # Pass the map, previous rewards and the goal through a few convolutional
       # layers to get fR.
+      pdb.set_trace()
       fr_op, fr_intermediate_op = fr_v2(
          x, output_neurons=args.arch.fr_neurons,
          inside_neurons=args.arch.fr_inside_neurons,
@@ -802,8 +812,10 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     m.action_prob_op = tf.nn.softmax(m.action_logits_op)
 
   init_state = tf.constant(0., dtype=tf.float32, shape=[
-      task_params.batch_size, 1, map_crop_size, map_crop_size,
+      1,1, map_crop_size, map_crop_size,
+      #task_params.batch_size, 1, map_crop_size, map_crop_size,
       task_params.map_channels])
+  init_state = tf.tile(init_state,[tf.shape(m.input_tensors['step']['imgs'])[0],1,1,1,1])
 
   m.train_ops['state_names'] = state_names
   m.train_ops['updated_state'] = updated_state
@@ -908,8 +920,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
       summary_mode: _add_summaries(m, args, summary_mode,
                                    args.summary.arop_full_summary_iters)}
   #Tri
-  clonemodel(m)
-  set_copying_ops(m)
+  if is_training:
+    clonemodel(m)
+    set_copying_ops(m)
   set_tmp_params(m)  
   
   #pdb.set_trace()

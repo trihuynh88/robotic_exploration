@@ -83,7 +83,9 @@ def get_solver_vars(solver_str):
   # adam eps
   if len(vals) == 6: ks.append('adam_eps');  vals.append('aeps1en8')
   # init lr
-  if len(vals) == 7: ks.append('init_lr');  vals.append('lr1en3')
+  #if len(vals) == 7: ks.append('init_lr');  vals.append('lr1en3')
+  #Tri
+  if len(vals) == 7: ks.append('init_lr');  vals.append('lr1en5')
 
   assert(len(vals) == 8)
   
@@ -176,7 +178,7 @@ def get_navtask_vars(navtask_str):
   # max steps
   if len(vals) == 4: ks.append('max_dist'); vals.append('32')
   # num steps
-  if len(vals) == 5: ks.append('num_steps'); vals.append('150')  #was 40 originally
+  if len(vals) == 5: ks.append('num_steps'); vals.append('502')  #was 40 originally
   # step size
   if len(vals) == 6: ks.append('step_size'); vals.append('8')
   # n_ori
