@@ -401,6 +401,10 @@ def _inputs(problem):
                      (None, None, len(problem.aux_delta_thetas)+1,
                       problem.img_height, problem.img_width,
                       problem.img_channels)))
+      #Tri
+      inputs.append(('explore_map', tf.float32,
+                     (None, None, None, None)))
+
     elif problem.input_type == 'analytical_counts':
       for i in range(len(problem.map_crop_sizes)):
         inputs.append(('analytical_counts_{:d}'.format(i), tf.float32, 
@@ -618,64 +622,64 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
   m.init_fn = None
 
-  if task_params.input_type == 'vision':
-    m.vision_ops = get_map_from_images(
-        m.input_tensors['step']['imgs'], args.mapper_arch,
-        task_params, args.solver.freeze_conv,
-        args.solver.wt_decay, is_training, batch_norm_is_training_op,
-        num_maps=len(task_params.map_crop_sizes))
-
-    # Load variables from snapshot if needed.
-    if args.solver.pretrained_path is not None:
-      #pdb.set_trace()
-      #clone_vars(m)
-      #set_copying_ops(m)
-
-      def init_fn_tri2(s):
-        pdb.set_trace()
-        print "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
-        assign_fn = slim.assign_from_checkpoint_fn(args.solver.pretrained_path,
-                                                 m.vision_ops.vars_to_restore)
-        assign_fn(s)
-        for op in m.copying_ops:
-          s.run(op)
-
-      #m.init_fn = lambda s: init_fn_tri(s,m)
-      #m.init_fn = init_fn_tri2
-      m.init_fn = slim.assign_from_checkpoint_fn(args.solver.pretrained_path,
-                                                 m.vision_ops.vars_to_restore)
-
-    # Set up caching of vision features if needed.
-    if args.solver.freeze_conv:
-      m.train_ops['step_data_cache'] = [m.vision_ops.encoder_output]
-    else:
-      m.train_ops['step_data_cache'] = []
-
-    # Set up blobs that are needed for the computation in rest of the graph.
-    m.ego_map_ops = m.vision_ops.fss_logits
-    m.coverage_ops = m.vision_ops.confs_probs
-    
-    # Zero pad these to make them same size as what the planner expects.
-    for i in range(len(m.ego_map_ops)):
-      if args.mapper_arch.pad_map_with_zeros_each[i] > 0:
-        paddings = np.zeros((5,2), dtype=np.int32)
-        paddings[2:4,:] = args.mapper_arch.pad_map_with_zeros_each[i]
-        paddings_op = tf.constant(paddings, dtype=tf.int32)
-        m.ego_map_ops[i] = tf.pad(m.ego_map_ops[i], paddings=paddings_op)
-        m.coverage_ops[i] = tf.pad(m.coverage_ops[i], paddings=paddings_op)
-  
-  elif task_params.input_type == 'analytical_counts':
-    m.ego_map_ops = []; m.coverage_ops = []
-    for i in range(len(task_params.map_crop_sizes)):
-      ego_map_op = m.input_tensors['step']['analytical_counts_{:d}'.format(i)]
-      coverage_op = tf.cast(tf.greater_equal(
-          tf.reduce_max(ego_map_op, reduction_indices=[4],
-                        keep_dims=True), 1), tf.float32)
-      coverage_op = tf.ones_like(ego_map_op) * coverage_op
-      m.ego_map_ops.append(ego_map_op)
-      m.coverage_ops.append(coverage_op)
-      m.train_ops['step_data_cache'] = []
-  
+#  if task_params.input_type == 'vision':
+#    m.vision_ops = get_map_from_images(
+#        m.input_tensors['step']['imgs'], args.mapper_arch,
+#        task_params, args.solver.freeze_conv,
+#        args.solver.wt_decay, is_training, batch_norm_is_training_op,
+#        num_maps=len(task_params.map_crop_sizes))
+#
+#    # Load variables from snapshot if needed.
+#    if args.solver.pretrained_path is not None:
+#      #pdb.set_trace()
+#      #clone_vars(m)
+#      #set_copying_ops(m)
+#
+#      def init_fn_tri2(s):
+#        pdb.set_trace()
+#        print "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+#        assign_fn = slim.assign_from_checkpoint_fn(args.solver.pretrained_path,
+#                                                 m.vision_ops.vars_to_restore)
+#        assign_fn(s)
+#        for op in m.copying_ops:
+#          s.run(op)
+#
+#      #m.init_fn = lambda s: init_fn_tri(s,m)
+#      #m.init_fn = init_fn_tri2
+#      m.init_fn = slim.assign_from_checkpoint_fn(args.solver.pretrained_path,
+#                                                 m.vision_ops.vars_to_restore)
+#
+#    # Set up caching of vision features if needed.
+#    if args.solver.freeze_conv:
+#      m.train_ops['step_data_cache'] = [m.vision_ops.encoder_output]
+#    else:
+#      m.train_ops['step_data_cache'] = []
+#
+#    # Set up blobs that are needed for the computation in rest of the graph.
+#    m.ego_map_ops = m.vision_ops.fss_logits
+#    m.coverage_ops = m.vision_ops.confs_probs
+#    
+#    # Zero pad these to make them same size as what the planner expects.
+#    for i in range(len(m.ego_map_ops)):
+#      if args.mapper_arch.pad_map_with_zeros_each[i] > 0:
+#        paddings = np.zeros((5,2), dtype=np.int32)
+#        paddings[2:4,:] = args.mapper_arch.pad_map_with_zeros_each[i]
+#        paddings_op = tf.constant(paddings, dtype=tf.int32)
+#        m.ego_map_ops[i] = tf.pad(m.ego_map_ops[i], paddings=paddings_op)
+#        m.coverage_ops[i] = tf.pad(m.coverage_ops[i], paddings=paddings_op)
+#  
+#  elif task_params.input_type == 'analytical_counts':
+#    m.ego_map_ops = []; m.coverage_ops = []
+#    for i in range(len(task_params.map_crop_sizes)):
+#      ego_map_op = m.input_tensors['step']['analytical_counts_{:d}'.format(i)]
+#      coverage_op = tf.cast(tf.greater_equal(
+#          tf.reduce_max(ego_map_op, reduction_indices=[4],
+#                        keep_dims=True), 1), tf.float32)
+#      coverage_op = tf.ones_like(ego_map_op) * coverage_op
+#      m.ego_map_ops.append(ego_map_op)
+#      m.coverage_ops.append(coverage_op)
+#      m.train_ops['step_data_cache'] = []
+#  
   num_steps = task_params.num_steps
   num_goals = task_params.num_goals
 
@@ -699,43 +703,44 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   updated_state = []; state_names = [];
 
   for i in range(len(task_params.map_crop_sizes)):
-    map_crop_size = task_params.map_crop_sizes[i]
-    with tf.variable_scope('scale_{:d}'.format(i)): 
-      # Accumulate the map.
-      fn = lambda ns: running_combine(
-             m.ego_map_ops[i],
-             m.coverage_ops[i],
-             m.input_tensors['step']['incremental_locs'] * task_params.map_scales[i],
-             m.input_tensors['step']['incremental_thetas'],
-             m.input_tensors['step']['running_sum_num_{:d}'.format(i)],
-             m.input_tensors['step']['running_sum_denom_{:d}'.format(i)],
-             m.input_tensors['step']['running_max_denom_{:d}'.format(i)],
-             map_crop_size, ns)
-
-      running_sum_num, running_sum_denom, running_max_denom = \
-          tf.cond(is_single_step, lambda: fn(1), lambda: fn(num_steps*num_goals))
-      updated_state += [running_sum_num, running_sum_denom, running_max_denom]
-      state_names += ['running_sum_num_{:d}'.format(i),
-                      'running_sum_denom_{:d}'.format(i),
-                      'running_max_denom_{:d}'.format(i)]
-
-      # Concat the accumulated map and goal
-      occupancy = running_sum_num / tf.maximum(running_sum_denom, 0.001)
-      conf = running_max_denom
-      # print occupancy.get_shape().as_list()
-
-      # Concat occupancy, how much occupied and goal.
+#    map_crop_size = task_params.map_crop_sizes[i]
+#    with tf.variable_scope('scale_{:d}'.format(i)): 
+#      # Accumulate the map.
+#      fn = lambda ns: running_combine(
+#             m.ego_map_ops[i],
+#             m.coverage_ops[i],
+#             m.input_tensors['step']['incremental_locs'] * task_params.map_scales[i],
+#             m.input_tensors['step']['incremental_thetas'],
+#             m.input_tensors['step']['running_sum_num_{:d}'.format(i)],
+#             m.input_tensors['step']['running_sum_denom_{:d}'.format(i)],
+#             m.input_tensors['step']['running_max_denom_{:d}'.format(i)],
+#             map_crop_size, ns)
+#
+#      running_sum_num, running_sum_denom, running_max_denom = \
+#          tf.cond(is_single_step, lambda: fn(1), lambda: fn(num_steps*num_goals))
+#      updated_state += [running_sum_num, running_sum_denom, running_max_denom]
+#      state_names += ['running_sum_num_{:d}'.format(i),
+#                      'running_sum_denom_{:d}'.format(i),
+#                      'running_max_denom_{:d}'.format(i)]
+#
+#      # Concat the accumulated map and goal
+#      occupancy = running_sum_num / tf.maximum(running_sum_denom, 0.001)
+#      conf = running_max_denom
+#      # print occupancy.get_shape().as_list()
+#
+#      # Concat occupancy, how much occupied and goal.
       with tf.name_scope('concat'):
-        sh = [-1, map_crop_size, map_crop_size, task_params.map_channels]
-        occupancy = tf.reshape(occupancy, shape=sh)
-        conf = tf.reshape(conf, shape=sh)
-
-        sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
-        #Tri: remove goal inputs when perform exploration task
-        #goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
-        #to_concat = [occupancy, conf, goal]
-        #pdb.set_trace()
-        to_concat = [occupancy, conf]
+#        sh = [-1, map_crop_size, map_crop_size, task_params.map_channels]
+#        occupancy = tf.reshape(occupancy, shape=sh)
+#        conf = tf.reshape(conf, shape=sh)
+#
+#        sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
+#        #Tri: remove goal inputs when perform exploration task
+#        #goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
+#        #to_concat = [occupancy, conf, goal]
+#        #pdb.set_trace()
+#        to_concat = [occupancy, conf]
+        
 
         if previous_value_op is not None:
           to_concat.append(previous_value_op)
@@ -744,7 +749,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
       # Pass the map, previous rewards and the goal through a few convolutional
       # layers to get fR.
-      pdb.set_trace()
+      #pdb.set_trace()
       fr_op, fr_intermediate_op = fr_v2(
          x, output_neurons=args.arch.fr_neurons,
          inside_neurons=args.arch.fr_inside_neurons,
@@ -774,8 +779,11 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
                                                        args.arch.vin_val_neurons])
       if i < len(task_params.map_crop_sizes)-1:
         # Reshape it to shape of the next scale.
+        #previous_value_op = tf.image.resize_bilinear(crop_value_op,
+        #                                             map_crop_size_ops[i+1],
+        #                                             align_corners=True)
         previous_value_op = tf.image.resize_bilinear(crop_value_op,
-                                                     map_crop_size_ops[i+1],
+                                                     tf.shape(x)[:2],
                                                      align_corners=True)
         resize_crop_value_ops.append(previous_value_op)
       
