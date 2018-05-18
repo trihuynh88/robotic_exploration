@@ -376,13 +376,13 @@ def inference_test_elem(sess,m,writer,e,init_env_state,dagger_sample_bn_false,rn
     #Tri
     j = 0
     #f = e.get_features(states[j], j)
-    f = e.get_features(init_env_state, j)
+    f = e.get_features_tri(init_env_state, j)
     f = e.pre_features(f)
 
-    net_state = sess.run(m.train_ops['init_state'],feed_dict={m.input_tensors['step']['imgs']:f['imgs'].astype(m.input_tensors['step']['imgs'].dtype.as_numpy_dtype)})
-    net_state = dict(zip(m.train_ops['state_names'], net_state))
+    #net_state = sess.run(m.train_ops['init_state'],feed_dict={m.input_tensors['step']['imgs']:f['imgs'].astype(m.input_tensors['step']['imgs'].dtype.as_numpy_dtype)})
+    #net_state = dict(zip(m.train_ops['state_names'], net_state))
 
-    f.update(net_state)
+    #f.update(net_state)
     f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
     #state_features.append(f)
     
@@ -419,14 +419,14 @@ def inference_test_elem(sess,m,writer,e,init_env_state,dagger_sample_bn_false,rn
       #  feed_dict[m.train_ops['batch_norm_is_training_op']] = False
       outs = sess.run(#[m.train_ops['step'], #m.sample_gt_prob_op,
                        #m.train_ops['step_data_cache'],
-                       [m.train_ops['updated_state'],
+                       [#m.train_ops['updated_state'],
                        #m.train_ops['outputs'],
                        m.action_logits_op], feed_dict=feed_dict)
       #action_probs = outs[0]
       #sample_gt_prob = outs[1]
       #step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
-      net_state = outs[0]
-      action_logits = outs[1]
+      #net_state = outs[0]
+      action_logits = outs[0]
       #if hasattr(e, 'update_state'):
       #  outputs = outs[4]
       #  outputs = dict(zip(m.train_ops['output_names'], outputs))
@@ -455,7 +455,7 @@ def inference_test_elem(sess,m,writer,e,init_env_state,dagger_sample_bn_false,rn
       #states.append(next_state_tri)
       #rewards.append(reward_tri)
       #action_sample_wts.append(action_sample_wt)
-      net_state = dict(zip(m.train_ops['state_names'], net_state))
+      #net_state = dict(zip(m.train_ops['state_names'], net_state))
       #net_state_to_input.append(net_state)
       #reordered from the top, preparing the next feed_dict
       #temporarily backup the old variable for testing (this var is not neccessary in the new rl framework)
@@ -464,9 +464,9 @@ def inference_test_elem(sess,m,writer,e,init_env_state,dagger_sample_bn_false,rn
       #new_datapool_elem = [feed_dict]
       #new_datapool_elem.append(feed_dict)
       #f = e.get_features(states[j+1], j+1)
-      f = e.get_features(next_state_tri, j+1)
+      f = e.get_features_tri(next_state_tri, j+1)
       f = e.pre_features(f)
-      f.update(net_state)
+      #f.update(net_state)
       f['step_number'] = np.ones((1,1,1), dtype=np.int32)*(j+1)
       #state_features.append(f)
 
@@ -489,8 +489,8 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  #dirpath = "test_maps_b32_lre6_decay10000_df099_exp50000_step500"
-  dirpath = "test_maps_debug"
+  dirpath = "test_maps_b32_lre6_decay10000_df099_exp50000_step300_mapinput"
+  #dirpath = "test_maps_debug"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
   n_step_str = ("%05d" % n_step)
@@ -498,7 +498,7 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   rng_data = copy.deepcopy(m.rng_data)
   #pdb.set_trace()
   total_reward = 0
-  num_test = 1
+  num_test = 32
   bool_save_imgs = False
   #if (np.mod(n_step,10000)==0):
   if n_step>(m.save_pic_step*m.save_pic_count):
@@ -506,7 +506,11 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
     bool_save_imgs = True
   for eind in range(num_test):
     e = obj.sample_env(rng_data)
-    init_env_state = e.reset(rng_data)
+    if m.train_type == 0:
+      init_env_state = e.reset_n_nodes(rng_data,1)
+    else:
+      init_env_state = e.reset_n_nodes(rng_data,m.batch_size)
+    #init_env_state = e.reset(rng_data)
     total_reward = total_reward + inference_test_elem(sess,m,writer,e,init_env_state,dagger_sample_bn_false,rng_action,dirpath+"/env"+str(eind),"env"+str(eind)+"_"+n_step_str,bool_save_imgs)
 
   #write summary for rewards
@@ -619,10 +623,11 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	    #feed_dict = prepare_feed_dict(m.input_tensors['step'], f)
 	    #pdb.set_trace()
 	    #net_state = sess.run(m.train_ops['init_state'], feed_dict=feed_dict)
-	    net_state = sess.run(m.train_ops['init_state'],feed_dict={m.input_tensors['step']['imgs']:f['imgs'].astype(m.input_tensors['step']['imgs'].dtype.as_numpy_dtype)})
-	    net_state = dict(zip(m.train_ops['state_names'], net_state))
 
-	    f.update(net_state)
+	    #net_state = sess.run(m.train_ops['init_state'],feed_dict={m.input_tensors['step']['imgs']:f['imgs'].astype(m.input_tensors['step']['imgs'].dtype.as_numpy_dtype)})
+	    #net_state = dict(zip(m.train_ops['state_names'], net_state))
+
+	    #f.update(net_state)
 	    f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
 	    #state_features.append(f)
 	    
@@ -652,14 +657,14 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	      #  feed_dict[m.train_ops['batch_norm_is_training_op']] = False
 	      outs = sess.run(#[m.train_ops['step'], #m.sample_gt_prob_op,
 			       #m.train_ops['step_data_cache'],
-			       [m.train_ops['updated_state'],
+			       #[m.train_ops['updated_state'],
 			       #m.train_ops['outputs'],
-			       m.action_logits_op], feed_dict=feed_dict)
+			       [m.action_logits_op], feed_dict=feed_dict)
 	      #action_probs = outs[0]
 	      #sample_gt_prob = outs[1]
 	      #step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
-	      net_state = outs[0]
-	      action_logits = outs[1]
+	      #net_state = outs[0]
+	      action_logits = outs[0]
 	      #if hasattr(e, 'update_state'):
 	      #  outputs = outs[2]
 	      #  outputs = dict(zip(m.train_ops['output_names'], outputs))
@@ -686,7 +691,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	      #states.append(next_state_tri)
 	      #rewards.append(reward_tri)
 	      #action_sample_wts.append(action_sample_wt)
-	      net_state = dict(zip(m.train_ops['state_names'], net_state))
+	      #net_state = dict(zip(m.train_ops['state_names'], net_state))
 	      #net_state_to_input.append(net_state)
 	      #reordered from the top, preparing the next feed_dict
 	      #temporarily backup the old variable for testing (this var is not neccessary in the new rl framework)
@@ -698,7 +703,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	      #pdb.set_trace()
 	      f = e.get_features_tri(next_state_tri, j+1)
 	      f = e.pre_features(f)
-	      f.update(net_state)
+	      #f.update(net_state)
 	      f['step_number'] = np.ones((1,1,1), dtype=np.int32)*(j+1)
 	      #state_features.append(f)
 

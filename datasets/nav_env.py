@@ -1069,7 +1069,7 @@ class NavigationEnv(GridWorld, Building):
         #pdb.set_trace()
         self.unexplored[i,y,x] = 0
         #mark the vis map for exploring steps
-        self.exploring_vis[i,y,x,2] = 0
+        self.exploring_vis[i,y,x,1] = 0
     
 
   def take_action_and_explore(self,current_node_ids,action):
@@ -1101,7 +1101,7 @@ class NavigationEnv(GridWorld, Building):
         x = x.astype(int)
         rewards[i] = (self.unexplored[i,y,x]==1).sum()
         self.unexplored[i,y,x] = 0
-        self.exploring_vis[i,y,x,2] = 0
+        self.exploring_vis[i,y,x,1] = 0
     return new_node_ids, rewards
 
   def get_optimal_action(self, current_node_ids, step_number):
@@ -1364,6 +1364,28 @@ class VisualNavigationEnv(NavigationEnv):
         outs['readout_maps_{:d}'.format(i)] = \
             np.expand_dims(np.expand_dims(maps[i], axis=1), axis=-1)
 
+    #Tri - inputting explore_map
+    #pdb.set_trace()
+    loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+                                                     delta_theta=self.task.delta_theta,
+                                                     perturb=perturbs[:,step_number,:])
+    explore_maps = []
+    for i in range(self.exploring_vis.shape[0]):
+      scaled_exploring_vis = resize_maps(
+          self.exploring_vis[i].astype(np.float32)*1, self.task_params.map_scales,
+          self.task_params.map_resize_method)
+      ego_exploring_vis = generate_egocentric_maps(scaled_exploring_vis,
+                                      self.task_params.map_scales,
+                                      self.task_params.map_crop_sizes,
+                                      loc, x_axis, y_axis, theta)
+      explore_maps.append(ego_exploring_vis)
+    
+    explore_maps = np.asarray(explore_maps).reshape((self.exploring_vis.shape[0],len(self.task_params.map_scales),self.task_params.map_crop_sizes[0],task_params.map_crop_sizes[1],self.exploring_vis.shape[-1]))
+    for i in range(len(self.task_params.map_scales)):
+      outs['explore_map_{:d}'.format(i)] = explore_maps[:,i]
+
+
+
     # Images for the goal.
     if self.task_params.outputs.ego_goal_imgs:
       if self.task_params.type[:14] != 'to_nearest_obj': 
@@ -1582,6 +1604,28 @@ class VisualNavigationEnv(NavigationEnv):
       for i in range(len(self.task_params.readout_maps_scales)):
         outs['readout_maps_{:d}'.format(i)] = \
             np.expand_dims(np.expand_dims(maps[i], axis=1), axis=-1)
+
+    #Tri - inputting explore_map
+    #pdb.set_trace()
+    loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+                                                     delta_theta=self.task.delta_theta,
+                                                     perturb=perturbs[:,step_number,:])
+    explore_maps = []
+    for i in range(self.exploring_vis.shape[0]):
+      scaled_exploring_vis = resize_maps(
+          self.exploring_vis[i].astype(np.float32)*1, self.task_params.map_scales,
+          self.task_params.map_resize_method)
+      ego_exploring_vis = generate_egocentric_maps(scaled_exploring_vis,
+                                      self.task_params.map_scales,
+                                      self.task_params.map_crop_sizes,
+                                      loc, x_axis, y_axis, theta)
+      explore_maps.append(ego_exploring_vis)
+    
+    explore_maps = np.asarray(explore_maps).reshape((self.exploring_vis.shape[0],len(self.task_params.map_scales),self.task_params.map_crop_sizes[0],task_params.map_crop_sizes[1],self.exploring_vis.shape[-1]))
+    for i in range(len(self.task_params.map_scales)):
+      outs['explore_map_{:d}'.format(i)] = explore_maps[:,i]
+
+
 
     # Images for the goal.
     if self.task_params.outputs.ego_goal_imgs:

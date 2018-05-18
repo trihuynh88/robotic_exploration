@@ -341,7 +341,7 @@ def clonemodel(m):
   vars_to_restore = slim.get_model_variables()
   #pdb.set_trace()
   #for var in vars_to_restore:
-  for var in vars_to_restore[-1:]:
+  for var in vars_to_restore:
     #new_var = tf.contrib.copy_graph.copy_variable_to_graph(var,cloned_graph,namespace)
     #cloned_vars.append(new_var)
     ###new_var = copy_variable_to_graph(var,cloned_graph,namespace,cloned_vars,fix_shape=True)
@@ -374,7 +374,7 @@ def set_copying_ops(m):
   m.copying_ops = copying_ops
 
 def set_tmp_params(m):
-  m.rl_num_explore_steps = 500
+  m.rl_num_explore_steps = 300
   m.rl_datapool_size = 10000
   m.rl_datapool = []
   m.rl_discount_factor = 0.99
@@ -396,14 +396,12 @@ def _inputs(problem):
 
     inputs = []
     if problem.input_type == 'vision':
+      print "problem.input_type = vision"
       # Multiple images from an array of cameras.
-      inputs.append(('imgs', tf.float32, 
-                     (None, None, len(problem.aux_delta_thetas)+1,
-                      problem.img_height, problem.img_width,
-                      problem.img_channels)))
-      #Tri
-      inputs.append(('explore_map', tf.float32,
-                     (None, None, None, None)))
+      #inputs.append(('imgs', tf.float32, 
+      #               (None, None, len(problem.aux_delta_thetas)+1,
+      #                problem.img_height, problem.img_width,
+      #                problem.img_channels)))
 
     elif problem.input_type == 'analytical_counts':
       for i in range(len(problem.map_crop_sizes)):
@@ -423,10 +421,16 @@ def _inputs(problem):
       inputs.append(('ego_goal_imgs_{:d}'.format(i), tf.float32, 
                     (None, None, problem.map_crop_sizes[i],
                      problem.map_crop_sizes[i], problem.goal_channels)))
-      for s in ['sum_num', 'sum_denom', 'max_denom']:
-        inputs.append(('running_'+s+'_{:d}'.format(i), tf.float32,
-                       (None, 1, problem.map_crop_sizes[i],
-                        problem.map_crop_sizes[i], problem.map_channels)))
+
+      #Tri
+      inputs.append(('explore_map_{:d}'.format(i), tf.float32,
+                     (None, problem.map_crop_sizes[i], problem.map_crop_sizes[i], 3)))
+
+
+      #for s in ['sum_num', 'sum_denom', 'max_denom']:
+      #  inputs.append(('running_'+s+'_{:d}'.format(i), tf.float32,
+      #                 (None, 1, problem.map_crop_sizes[i],
+      #                  problem.map_crop_sizes[i], problem.map_channels)))
 
     inputs.append(('incremental_locs', tf.float32, 
                    (None, None, 2)))
@@ -687,11 +691,11 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   for map_crop_size in task_params.map_crop_sizes:
     map_crop_size_ops.append(tf.constant(map_crop_size, dtype=tf.int32, shape=(2,)))
 
-  with tf.name_scope('check_size'):
-    is_single_step = tf.equal(tf.unstack(tf.shape(m.ego_map_ops[0]), num=5)[1], 1)
+#  with tf.name_scope('check_size'):
+#    is_single_step = tf.equal(tf.unstack(tf.shape(m.ego_map_ops[0]), num=5)[1], 1)
 
   #debug
-  m.is_single_step = is_single_step
+#  m.is_single_step = is_single_step
 
   fr_ops = []; value_ops = [];
   fr_intermediate_ops = []; value_intermediate_ops = [];
@@ -704,7 +708,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
   for i in range(len(task_params.map_crop_sizes)):
 #    map_crop_size = task_params.map_crop_sizes[i]
-#    with tf.variable_scope('scale_{:d}'.format(i)): 
+    with tf.variable_scope('scale_{:d}'.format(i)): 
 #      # Accumulate the map.
 #      fn = lambda ns: running_combine(
 #             m.ego_map_ops[i],
@@ -741,10 +745,10 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 #        #pdb.set_trace()
 #        to_concat = [occupancy, conf]
         
-
+        to_concat = [m.input_tensors['step']['explore_map_{:d}'.format(i)]]
         if previous_value_op is not None:
           to_concat.append(previous_value_op)
-
+        
         x = tf.concat(to_concat, 3)
 
       # Pass the map, previous rewards and the goal through a few convolutional
@@ -779,16 +783,16 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
                                                        args.arch.vin_val_neurons])
       if i < len(task_params.map_crop_sizes)-1:
         # Reshape it to shape of the next scale.
-        #previous_value_op = tf.image.resize_bilinear(crop_value_op,
-        #                                             map_crop_size_ops[i+1],
-        #                                             align_corners=True)
         previous_value_op = tf.image.resize_bilinear(crop_value_op,
-                                                     tf.shape(x)[:2],
+                                                     map_crop_size_ops[i+1],
                                                      align_corners=True)
+        #previous_value_op = tf.image.resize_bilinear(crop_value_op,
+        #                                             tf.shape(x)[:2],
+        #                                             align_corners=True)
         resize_crop_value_ops.append(previous_value_op)
       
-      occupancys.append(occupancy)
-      confs.append(conf)
+      #occupancys.append(occupancy)
+      #confs.append(conf)
       value_ops.append(value_op)
       crop_value_ops.append(crop_value_op)
       fr_ops.append(fr_op)
@@ -819,11 +823,11 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
         batch_norm_param=batch_norm_param) 
     m.action_prob_op = tf.nn.softmax(m.action_logits_op)
 
-  init_state = tf.constant(0., dtype=tf.float32, shape=[
-      1,1, map_crop_size, map_crop_size,
+  #init_state = tf.constant(0., dtype=tf.float32, shape=[
+  #    1,1, map_crop_size, map_crop_size,
       #task_params.batch_size, 1, map_crop_size, map_crop_size,
-      task_params.map_channels])
-  init_state = tf.tile(init_state,[tf.shape(m.input_tensors['step']['imgs'])[0],1,1,1,1])
+  #    task_params.map_channels])
+  #init_state = tf.tile(init_state,[tf.shape(m.input_tensors['step']['imgs'])[0],1,1,1,1])
 
   m.train_ops['state_names'] = state_names
   m.train_ops['updated_state'] = updated_state
@@ -888,8 +892,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   m.loss_ops_names += ['reg_loss', 'data_loss', 'total_loss']
 
   if args.solver.freeze_conv:
-    vars_to_optimize = list(set(tf.trainable_variables()) -
-                            set(m.vision_ops.vars_to_restore))
+    #vars_to_optimize = list(set(tf.trainable_variables()) -
+    #                        set(m.vision_ops.vars_to_restore))
+    vars_to_optimize = list(set(tf.trainable_variables()))
   else:
     vars_to_optimize = None
 
