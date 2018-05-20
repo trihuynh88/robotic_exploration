@@ -178,7 +178,7 @@ def get_navtask_vars(navtask_str):
   # max steps
   if len(vals) == 4: ks.append('max_dist'); vals.append('32')
   # num steps
-  if len(vals) == 5: ks.append('num_steps'); vals.append('502')  #was 40 originally
+  if len(vals) == 5: ks.append('num_steps'); vals.append('202')  #was 40 originally
   # step size
   if len(vals) == 6: ks.append('step_size'); vals.append('8')
   # n_ori

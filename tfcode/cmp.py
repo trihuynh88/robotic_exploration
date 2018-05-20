@@ -374,7 +374,7 @@ def set_copying_ops(m):
   m.copying_ops = copying_ops
 
 def set_tmp_params(m):
-  m.rl_num_explore_steps = 500
+  m.rl_num_explore_steps = 200
   m.rl_datapool_size = 10000
   m.rl_datapool = []
   m.rl_discount_factor = 0.99
@@ -431,8 +431,8 @@ def _inputs(problem):
     inputs.append(('step_number', tf.int32, (1, None, 1)))
     inputs.append(('node_ids', tf.int32, (None, None,
                                           problem.node_ids_dim)))
-    inputs.append(('perturbs', tf.float32, (None, None,
-                                            problem.perturbs_dim)))
+    #inputs.append(('perturbs', tf.float32, (None, None,
+    #                                        problem.perturbs_dim)))
     
     # For plotting result plots
     inputs.append(('loc_on_map', tf.float32, (None, None, 2)))
@@ -504,7 +504,7 @@ def running_combine(fss_logits, confs_probs, incremental_locs,
     running_max_denoms = tf.stack(running_max_denoms_, axis=1)
     return running_sum_nums, running_sum_denoms, running_max_denoms
 
-def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
+def get_map_from_images(m,imgs, mapper_arch, task_params, freeze_conv, wt_decay,
                         is_training, batch_norm_is_training_op, num_maps,
                         split_maps=True):
   # Hit image with a resnet.
@@ -521,9 +521,16 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
              task_params.img_width,
              task_params.img_channels], name='re_image')
 
-  x, out.vars_to_restore = get_repr_from_image(
+  if m.is_main:
+    x, out.vars_to_restore = get_repr_from_image(
       images_reshaped, task_params.modalities, task_params.data_augment,
       mapper_arch.encoder, freeze_conv, wt_decay, is_training)
+    m.x = x
+    m.vars_to_restore = out.vars_to_restore
+  else:
+    x = m.x
+    out.vars_to_restore = m.vars_to_restore
+    
 
   # Reshape into nice things so that these can be accumulated over time steps
   # for faster backprop.
@@ -606,20 +613,26 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   tf.set_random_seed(args.solver.seed)
   task_params = args.navtask.task_params
 
-  batch_norm_is_training_op = \
+  if m.is_main:
+    batch_norm_is_training_op = \
       tf.placeholder_with_default(batch_norm_is_training, shape=[],
                                   name='batch_norm_is_training_op') 
+    m.batch_norm_is_training_op = batch_norm_is_training_op
+  else:
+    batch_norm_is_training_op = m.batch_norm_is_training_op
 
   # Setup the inputs
-  m.input_tensors = {}
+  #m.input_tensors = {}
   m.train_ops = {}
-  m.input_tensors['common'], m.input_tensors['step'], m.input_tensors['train'] = \
+  if m.is_main:
+    m.input_tensors = {}
+    m.input_tensors['common'], m.input_tensors['step'], m.input_tensors['train'] = \
       _inputs(task_params)
 
   m.init_fn = None
 
   if task_params.input_type == 'vision':
-    m.vision_ops = get_map_from_images(
+    m.vision_ops = get_map_from_images(m,
         m.input_tensors['step']['imgs'], args.mapper_arch,
         task_params, args.solver.freeze_conv,
         args.solver.wt_decay, is_training, batch_norm_is_training_op,
@@ -744,7 +757,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
       # Pass the map, previous rewards and the goal through a few convolutional
       # layers to get fR.
-      pdb.set_trace()
+      #pdb.set_trace()
       fr_op, fr_intermediate_op = fr_v2(
          x, output_neurons=args.arch.fr_neurons,
          inside_neurons=args.arch.fr_inside_neurons,
@@ -852,9 +865,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
           scope='loss')
       m.readout_maps_loss_op = 10.*m.readout_maps_loss_op
 
-  ewma_decay = 0.99 if is_training else 0.0
-  weight = tf.ones_like(m.input_tensors['train']['action'], dtype=tf.float32,
-                        name='weight')
+  #ewma_decay = 0.99 if is_training else 0.0
+  #weight = tf.ones_like(m.input_tensors['train']['action'], dtype=tf.float32,
+  #                      name='weight')
   #m.reg_loss_op, m.data_loss_op, m.total_loss_op, m.acc_ops = \
   #  compute_losses_multi_or(m.action_logits_op,
   #                          m.input_tensors['train']['action'], weights=weight,
@@ -864,74 +877,75 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   #                          ewma_decay=ewma_decay)
 
   #Tri
-  m.reg_loss_op, m.data_loss_op, m.total_loss_op = \
-    rl_compute_losses_multi_or(m.action_logits_op,
-                            m.input_tensors['train']['action_one'],m.input_tensors['train']['target'],
-                            num_actions=task_params.num_actions,
-                            data_loss_wt=args.solver.data_loss_wt,
-                            reg_loss_wt=args.solver.reg_loss_wt)
+  if m.is_main:
+    m.reg_loss_op, m.data_loss_op, m.total_loss_op = \
+      rl_compute_losses_multi_or(m.action_logits_op,
+                              m.input_tensors['train']['action_one'],m.input_tensors['train']['target'],
+                              num_actions=task_params.num_actions,
+                              data_loss_wt=args.solver.data_loss_wt,
+                              reg_loss_wt=args.solver.reg_loss_wt)
+    
+    if args.arch.readout_maps:
+      m.total_loss_op = m.total_loss_op + m.readout_maps_loss_op
+      m.loss_ops += [m.readout_maps_loss_op]
+      m.loss_ops_names += ['readout_maps_loss']
   
-  if args.arch.readout_maps:
-    m.total_loss_op = m.total_loss_op + m.readout_maps_loss_op
-    m.loss_ops += [m.readout_maps_loss_op]
-    m.loss_ops_names += ['readout_maps_loss']
-
-  m.loss_ops += [m.reg_loss_op, m.data_loss_op, m.total_loss_op]
-  m.loss_ops_names += ['reg_loss', 'data_loss', 'total_loss']
-
-  if args.solver.freeze_conv:
-    vars_to_optimize = list(set(tf.trainable_variables()) -
-                            set(m.vision_ops.vars_to_restore))
-  else:
-    vars_to_optimize = None
-
-  m.lr_op, m.global_step_op, m.train_op, m.should_stop_op, m.optimizer, \
-  m.sync_optimizer = tf_utils.setup_training(
-      m.total_loss_op, 
-      args.solver.initial_learning_rate, 
-      args.solver.steps_per_decay,
-      args.solver.learning_rate_decay, 
-      args.solver.momentum,
-      args.solver.max_steps, 
-      args.solver.sync, 
-      args.solver.adjust_lr_sync,
-      args.solver.num_workers, 
-      args.solver.task,
-      vars_to_optimize=vars_to_optimize,
-      clip_gradient_norm=args.solver.clip_gradient_norm,
-      typ=args.solver.typ, momentum2=args.solver.momentum2,
-      adam_eps=args.solver.adam_eps)
-
-  if args.arch.sample_gt_prob_type == 'inverse_sigmoid_decay':
-    m.sample_gt_prob_op = tf_utils.inverse_sigmoid_decay(args.arch.isd_k,
-                                                         m.global_step_op)
-  elif args.arch.sample_gt_prob_type == 'zero':
-    m.sample_gt_prob_op = tf.constant(-1.0, dtype=tf.float32)
-
-  elif args.arch.sample_gt_prob_type.split('_')[0] == 'step':
-    step = int(args.arch.sample_gt_prob_type.split('_')[1])
-    m.sample_gt_prob_op = tf_utils.step_gt_prob(
-        step, m.input_tensors['step']['step_number'][0,0,0])
-
-  m.sample_action_type = args.arch.action_sample_type
-  m.sample_action_combine_type = args.arch.action_sample_combine_type
-
-  m.summary_ops = {
-      summary_mode: _add_summaries(m, args, summary_mode,
-                                   args.summary.arop_full_summary_iters)}
-  #Tri
-  if is_training:
-    clonemodel(m)
-    set_copying_ops(m)
-  set_tmp_params(m)  
+    m.loss_ops += [m.reg_loss_op, m.data_loss_op, m.total_loss_op]
+    m.loss_ops_names += ['reg_loss', 'data_loss', 'total_loss']
   
-  #pdb.set_trace()
-  m.init_op = tf.group(tf.global_variables_initializer(),
-                       tf.local_variables_initializer())
-
-  #pdb.set_trace()
-  m.saver_op = tf.train.Saver(keep_checkpoint_every_n_hours=4,
-                              write_version=tf.train.SaverDef.V2)#,var_list=slim.get_variables_to_restore(exclude=['cloned']))
-
+    if args.solver.freeze_conv:
+      vars_to_optimize = list(set(tf.trainable_variables()) -
+                              set(m.vision_ops.vars_to_restore))
+    else:
+      vars_to_optimize = None
+  
+    m.lr_op, m.global_step_op, m.train_op, m.should_stop_op, m.optimizer, \
+    m.sync_optimizer = tf_utils.setup_training(
+        m.total_loss_op, 
+        args.solver.initial_learning_rate, 
+        args.solver.steps_per_decay,
+        args.solver.learning_rate_decay, 
+        args.solver.momentum,
+        args.solver.max_steps, 
+        args.solver.sync, 
+        args.solver.adjust_lr_sync,
+        args.solver.num_workers, 
+        args.solver.task,
+        vars_to_optimize=vars_to_optimize,
+        clip_gradient_norm=args.solver.clip_gradient_norm,
+        typ=args.solver.typ, momentum2=args.solver.momentum2,
+        adam_eps=args.solver.adam_eps)
+  
+    if args.arch.sample_gt_prob_type == 'inverse_sigmoid_decay':
+      m.sample_gt_prob_op = tf_utils.inverse_sigmoid_decay(args.arch.isd_k,
+                                                           m.global_step_op)
+    elif args.arch.sample_gt_prob_type == 'zero':
+      m.sample_gt_prob_op = tf.constant(-1.0, dtype=tf.float32)
+  
+    elif args.arch.sample_gt_prob_type.split('_')[0] == 'step':
+      step = int(args.arch.sample_gt_prob_type.split('_')[1])
+      m.sample_gt_prob_op = tf_utils.step_gt_prob(
+          step, m.input_tensors['step']['step_number'][0,0,0])
+  
+    m.sample_action_type = args.arch.action_sample_type
+    m.sample_action_combine_type = args.arch.action_sample_combine_type
+  
+    m.summary_ops = {
+        summary_mode: _add_summaries(m, args, summary_mode,
+                                     args.summary.arop_full_summary_iters)}
+    #Tri
+    #if is_training:
+    #  clonemodel(m)
+    #  set_copying_ops(m)
+    set_tmp_params(m)  
+    
+    #pdb.set_trace()
+    m.init_op = tf.group(tf.global_variables_initializer(),
+                         tf.local_variables_initializer())
+  
+    #pdb.set_trace()
+    m.saver_op = tf.train.Saver(keep_checkpoint_every_n_hours=4,
+                                write_version=tf.train.SaverDef.V2)#,var_list=slim.get_variables_to_restore(exclude=['cloned']))
+  
 
   return m

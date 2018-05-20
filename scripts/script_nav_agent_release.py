@@ -343,50 +343,26 @@ def _setup_args(config_name, logdir):
 #    return graph.as_graph_element(new_name, allow_tensor=True,
 #                                  allow_operation=True)
 #
-#def clonemodel(m):
-#  """cloning all the variables & operations to a new graph."""
-#  #pdb.set_trace()
-#  namespace = "cloned"
-#  #cloned_vars = []
-#  cloned_vars = {}
-#  #cloned_graph = tf.Graph()_
-#  #cloned_graph = tf.get_default_graph()
-#  graph = tf.get_default_graph()
-#  #graph = tf.Graph()
-#  #vars_to_restore = slim.get_variables_to_restore()
-#  vars_to_restore = slim.get_model_variables()
-#  #pdb.set_trace()
-#  for var in vars_to_restore[:3]:
-#    #new_var = tf.contrib.copy_graph.copy_variable_to_graph(var,cloned_graph,namespace)
-#    #cloned_vars.append(new_var)
-#    ###new_var = copy_variable_to_graph(var,cloned_graph,namespace,cloned_vars,fix_shape=True)
-#    new_var = copy_variable_to_graph(var,graph,namespace,cloned_vars,fix_shape=True)
-#
-#  #pdb.set_trace()
-#  print "finished cloning variables"
-#  #cloned_action_logits_op = tf.contrib.copy_graph.copy_op_to_graph(m.action_logits_op,cloned_graph,cloned_vars,namespace) 
-#  #cloned_action_logits_op = copy_to_graph(m.action_logits_op,cloned_graph,cloned_vars,namespace)
-#  cloned_action_logits_op = copy_to_graph(m.action_logits_op,graph,cloned_vars,namespace)
-#  print "finished cloning op"
-#  #m.cloned_graph = cloned_graph
-#  m.cloned_vars = cloned_vars
-#  m.cloned_action_logits_op = cloned_action_logits_op
-#  m.cloned_namespace = namespace
-#  print "finished cloning model ----------------------"
-#  #pdb.set_trace()
-#
-#def set_copying_ops(m):
-#  copying_ops = []
-#  model_vars = slim.get_model_variables()
-#  for var in model_vars:
-#    new_name = (m.cloned_namespace + '/' + var.name)
-#    if new_name in m.cloned_vars.keys():
-#      new_var = m.cloned_vars[new_name]
-#      copy_op = new_var.assign(var)
-#      copying_ops.append(copy_op)
-#
-#  m.copying_ops = copying_ops
-#
+def clonemodel(m,m_cloned):
+  namespace = "cloned"
+  m.cloned_action_logits_op = m_cloned.action_logits_op
+  m.cloned_namespace = namespace
+
+def set_copying_ops(m):
+  #pdb.set_trace()
+  copying_ops = []
+  model_vars = slim.get_variables(scope="cloned")
+  for var in model_vars:
+    #new_name = (m.cloned_namespace + '/' + var.name)
+    new_name = var.name[7:]
+    #if new_name in m.cloned_vars.keys():
+    #new_var = m.cloned_vars[new_name]
+    new_var = tf.get_default_graph().get_tensor_by_name(new_name)
+    copy_op = var.assign(new_var)
+    copying_ops.append(copy_op)
+
+  m.copying_ops = copying_ops
+
 #def set_tmp_params(m):
 #  m.rl_num_explore_steps = 100
 #  m.rl_datapool_size = 100000
@@ -402,13 +378,14 @@ def _train(args):
   container_name = ""
   #tmp setting TRI
   args.solver.max_steps = 500000
-  args.solver.steps_per_decay = 10000
-  args.solver.initial_learning_rate = 1e-6
+  args.solver.steps_per_decay = 50000
+  args.solver.initial_learning_rate = 1e-7
   args.navtask.task_params.batch_size = 32
 
   #pdb.set_trace()
   R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
   m = utils.Foo()
+  m_cloned = utils.Foo()
   m.tf_graph = tf.Graph()
 
   #Tri
@@ -422,6 +399,9 @@ def _train(args):
   m.save_reward_step = 500
   m.save_reward_count = 0
 
+  m.is_main = True
+  m_cloned.is_main = False
+
   config = tf.ConfigProto()
   config.device_count['GPU'] = 1
 
@@ -431,6 +411,22 @@ def _train(args):
       with tf.container(container_name):
         m = args.setup_to_run(m, args, is_training=True,
                              batch_norm_is_training=True, summary_mode='train')
+
+        #pdb.set_trace()
+
+        #with tf.name_scope('cloned'):
+        m_cloned.x = m.x
+        m_cloned.vars_to_restore = m.vars_to_restore
+        m_cloned.batch_norm_is_training_op = m.batch_norm_is_training_op
+        m_cloned.input_tensors = m.input_tensors
+        with tf.variable_scope('cloned'):
+          m_cloned = args.setup_to_run(m_cloned, args, is_training=True,
+                             batch_norm_is_training=True, summary_mode='train')
+
+        clonemodel(m,m_cloned)
+        set_copying_ops(m)
+        m.init_op = tf.group(tf.global_variables_initializer(),
+                         tf.local_variables_initializer())
 
         train_step_kwargs = args.setup_train_step_kwargs(
             m, R(), os.path.join(args.logdir, 'train'), rng_seed=args.solver.task,
@@ -499,6 +495,7 @@ def _test(args):
         m, args, is_training=False,
         batch_norm_is_training=args.control.force_batchnorm_is_training_at_test,
         summary_mode=args.control.test_mode)
+
       train_step_kwargs = args.setup_train_step_kwargs(
         m, R(), os.path.join(args.logdir, args.control.test_name),
         rng_seed=rng_data_seed, is_chief=True,

@@ -489,8 +489,8 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  #dirpath = "test_maps_b32_lre6_decay10000_df099_exp50000_step500"
-  dirpath = "test_maps_debug"
+  dirpath = "test_maps_b32_lre7_decay50000_df099_exp50000_step200_reusevars_noperturb"
+  #dirpath = "test_maps_debug"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
   n_step_str = ("%05d" % n_step)
@@ -710,9 +710,10 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	      if dagger_sample_bn_false:
 		feed_dict[m.train_ops['batch_norm_is_training_op']] = False
 	      
-	      cloned_feed_dict = copy_feed_dict_to_namespace(feed_dict,m)
+	      #cloned_feed_dict = copy_feed_dict_to_namespace(feed_dict,m)
 	      #pdb.set_trace()
-	      new_datapool_elem.append(cloned_feed_dict)
+	      #new_datapool_elem.append(cloned_feed_dict)
+              new_datapool_elem.append(feed_dict)
 	      new_datapool_elem.append(action_taken[:,np.newaxis])
 	      new_datapool_elem.append(reward_tri)
 	      #m.rl_datapool.append(new_datapool_elem)
@@ -740,7 +741,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 				pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
 				for elemind in range(2):
 				  for key, value in pool_elem[elemind].iteritems():
-				    if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0' and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
+				    if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0'): #and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
 				      picked_pool_elem[elemind][key] = np.concatenate((picked_pool_elem[elemind][key],value))
 				picked_pool_elem[2] = np.concatenate((picked_pool_elem[2],pool_elem[2]))
 				picked_pool_elem[3] = np.concatenate((picked_pool_elem[3],pool_elem[3]))
