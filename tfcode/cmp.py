@@ -374,7 +374,8 @@ def set_copying_ops(m):
   m.copying_ops = copying_ops
 
 def set_tmp_params(m):
-  m.rl_num_explore_steps = 200
+  m.rl_num_explore_steps = 500
+  m.rl_num_explore_steps_test = 1000
   m.rl_datapool_size = 10000
   m.rl_datapool = []
   m.rl_discount_factor = 0.99
@@ -390,8 +391,8 @@ def _inputs(problem):
     inputs = []
     inputs.append(('orig_maps', tf.float32, 
                    (None, 1, None, None, 1)))
-    inputs.append(('goal_loc', tf.float32, 
-                   (None, problem.num_goals, 2)))
+    #inputs.append(('goal_loc', tf.float32, 
+    #               (None, problem.num_goals, 2)))
     common_input_data, _ = tf_utils.setup_inputs(inputs)
 
     inputs = []
@@ -416,9 +417,9 @@ def _inputs(problem):
                        problem.readout_maps_channels)))
 
     for i in range(len(problem.map_crop_sizes)):
-      inputs.append(('ego_goal_imgs_{:d}'.format(i), tf.float32, 
-                    (None, None, problem.map_crop_sizes[i],
-                     problem.map_crop_sizes[i], problem.goal_channels)))
+      #inputs.append(('ego_goal_imgs_{:d}'.format(i), tf.float32, 
+      #              (None, None, problem.map_crop_sizes[i],
+      #               problem.map_crop_sizes[i], problem.goal_channels)))
       for s in ['sum_num', 'sum_denom', 'max_denom']:
         inputs.append(('running_'+s+'_{:d}'.format(i), tf.float32,
                        (None, 1, problem.map_crop_sizes[i],
@@ -436,7 +437,7 @@ def _inputs(problem):
     
     # For plotting result plots
     inputs.append(('loc_on_map', tf.float32, (None, None, 2)))
-    inputs.append(('gt_dist_to_goal', tf.float32, (None, None, 1)))
+    #inputs.append(('gt_dist_to_goal', tf.float32, (None, None, 1)))
 
     step_input_data, _ = tf_utils.setup_inputs(inputs)
 
@@ -725,8 +726,8 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
              m.input_tensors['step']['running_max_denom_{:d}'.format(i)],
              map_crop_size, ns)
 
-      running_sum_num, running_sum_denom, running_max_denom = \
-          tf.cond(is_single_step, lambda: fn(1), lambda: fn(num_steps*num_goals))
+      running_sum_num, running_sum_denom, running_max_denom = fn(1)
+          #tf.cond(is_single_step, lambda: fn(1), lambda: fn(num_steps*num_goals))
       updated_state += [running_sum_num, running_sum_denom, running_max_denom]
       state_names += ['running_sum_num_{:d}'.format(i),
                       'running_sum_denom_{:d}'.format(i),
@@ -743,7 +744,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
         occupancy = tf.reshape(occupancy, shape=sh)
         conf = tf.reshape(conf, shape=sh)
 
-        sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
+        #sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
         #Tri: remove goal inputs when perform exploration task
         #goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
         #to_concat = [occupancy, conf, goal]
@@ -835,8 +836,8 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   m.train_ops['init_state'] = [init_state for _ in updated_state]
 
   m.train_ops['step'] = m.action_prob_op
-  m.train_ops['common'] = [m.input_tensors['common']['orig_maps'],
-                           m.input_tensors['common']['goal_loc']]
+  m.train_ops['common'] = [m.input_tensors['common']['orig_maps']]
+                           #m.input_tensors['common']['goal_loc']]
   m.train_ops['batch_norm_is_training_op'] = batch_norm_is_training_op
   m.loss_ops = []; m.loss_ops_names = [];
 

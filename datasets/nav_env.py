@@ -960,14 +960,25 @@ class NavigationEnv(GridWorld, Building):
     nodes = self.task.nodes
     tp = self.task_params
 
-    start_node_ids, goal_node_ids, dists, target_class = \
+    #start_node_ids, goal_node_ids, dists, target_class = \
+    #    _nav_env_reset_helper(tp.type, rng, self.task.nodes, tp.batch_size,
+    #                          self.task.gtG, tp.max_dist, tp.num_steps,
+    #                          tp.num_goals, tp.data_augment,
+    #                          **(self.task.reset_kwargs))
+
+    start_node_ids, _, _, _ = \
         _nav_env_reset_helper(tp.type, rng, self.task.nodes, tp.batch_size,
                               self.task.gtG, tp.max_dist, tp.num_steps,
                               tp.num_goals, tp.data_augment,
                               **(self.task.reset_kwargs))
 
     start_nodes = [tuple(nodes[_,:]) for _ in start_node_ids]
-    goal_nodes = [[tuple(nodes[_,:]) for _ in __] for __ in goal_node_ids]
+    #goal_nodes = [[tuple(nodes[_,:]) for _ in __] for __ in goal_node_ids]
+    goal_nodes = None
+    goal_node_ids = None
+    dists = None
+    target_class = None
+
     data_augment = tp.data_augment
     #perturbs = _gen_perturbs(rng_perturb, tp.batch_size,
     #                         (tp.num_steps+1)*tp.num_goals,
@@ -1000,14 +1011,20 @@ class NavigationEnv(GridWorld, Building):
     nodes = self.task.nodes
     tp = self.task_params
 
-    start_node_ids, goal_node_ids, dists, target_class = \
+    #pdb.set_trace()
+    start_node_ids, _, _, _ = \
         _nav_env_reset_helper(tp.type, rng, self.task.nodes, n_num,
                               self.task.gtG, tp.max_dist, tp.num_steps,
                               tp.num_goals, tp.data_augment,
                               **(self.task.reset_kwargs))
 
     start_nodes = [tuple(nodes[_,:]) for _ in start_node_ids]
-    goal_nodes = [[tuple(nodes[_,:]) for _ in __] for __ in goal_node_ids]
+    #goal_nodes = [[tuple(nodes[_,:]) for _ in __] for __ in goal_node_ids]
+    goal_nodes = None
+    goal_node_ids = None
+    target_class = None
+    dists = None
+
     data_augment = tp.data_augment
     #pdb.set_trace()
     #perturbs = _gen_perturbs(rng_perturb, n_num,
@@ -1235,8 +1252,8 @@ class VisualNavigationEnv(NavigationEnv):
   def get_features_tri(self, current_node_ids, step_number):
     num_imgs = len(current_node_ids)
     task_params = self.task_params
-    goal_number = step_number / self.task_params.num_steps
-    end_nodes = self.task.nodes[self.episode.goal_node_ids[goal_number],:]*1
+    #goal_number = step_number / self.task_params.num_steps
+    #end_nodes = self.task.nodes[self.episode.goal_node_ids[goal_number],:]*1
     current_nodes = self.task.nodes[current_node_ids,:]*1
     #end_perturbs = self.episode.goal_perturbs[:,goal_number,:][:,np.newaxis,:]
     #perturbs = self.episode.perturbs
@@ -1307,28 +1324,28 @@ class VisualNavigationEnv(NavigationEnv):
         outs['analytical_counts_{:d}'.format(i)] = count
 
     # Compute the goal location in the cordinate frame of the robot.
-    if self.task_params.outputs.rel_goal_loc:
-      if self.task_params.type[:14] != 'to_nearest_obj':
-        loc, _, _, theta = self.get_loc_axis(current_nodes,
-                                             delta_theta=self.task.delta_theta)
-                                             #perturb=perturbs[:,step_number,:])
-        goal_loc, _, _, goal_theta = self.get_loc_axis(end_nodes,
-                                                       delta_theta=self.task.delta_theta)
-                                                       #perturb=end_perturbs[:,0,:])
-        r_goal, t_goal = _get_relative_goal_loc(goal_loc, loc, theta)
+  #  if self.task_params.outputs.rel_goal_loc:
+  #    if self.task_params.type[:14] != 'to_nearest_obj':
+  #      loc, _, _, theta = self.get_loc_axis(current_nodes,
+  #                                           delta_theta=self.task.delta_theta)
+  #                                           #perturb=perturbs[:,step_number,:])
+  #      goal_loc, _, _, goal_theta = self.get_loc_axis(end_nodes,
+  #                                                     delta_theta=self.task.delta_theta)
+  #                                                     #perturb=end_perturbs[:,0,:])
+  #      r_goal, t_goal = _get_relative_goal_loc(goal_loc, loc, theta)
 
-        rel_goal_loc = np.concatenate((r_goal*np.cos(t_goal), r_goal*np.sin(t_goal),
-                                       np.cos(goal_theta-theta),
-                                       np.sin(goal_theta-theta)), axis=1)
-        outs['rel_goal_loc'] = np.expand_dims(rel_goal_loc, axis=1)
-      elif self.task_params.type[:14] == 'to_nearest_obj':
-        rel_goal_loc = np.zeros((num_imgs, 1,
-                                 len(self.task_params.semantic_task.class_map_names)),
-                                dtype=np.float32)
-        for i in range(num_imgs):
-          t = target_class[i]
-          rel_goal_loc[i,0,t] = 1.
-        outs['rel_goal_loc'] = rel_goal_loc
+  #      rel_goal_loc = np.concatenate((r_goal*np.cos(t_goal), r_goal*np.sin(t_goal),
+  #                                     np.cos(goal_theta-theta),
+  #                                     np.sin(goal_theta-theta)), axis=1)
+  #      outs['rel_goal_loc'] = np.expand_dims(rel_goal_loc, axis=1)
+  #    elif self.task_params.type[:14] == 'to_nearest_obj':
+  #      rel_goal_loc = np.zeros((num_imgs, 1,
+  #                               len(self.task_params.semantic_task.class_map_names)),
+  #                              dtype=np.float32)
+  #      for i in range(num_imgs):
+  #        t = target_class[i]
+  #        rel_goal_loc[i,0,t] = 1.
+  #      outs['rel_goal_loc'] = rel_goal_loc
 
     # Location on map to plot the trajectory during validation.
     if self.task_params.outputs.loc_on_map:
@@ -1338,11 +1355,11 @@ class VisualNavigationEnv(NavigationEnv):
       outs['loc_on_map'] = np.expand_dims(loc, axis=1)
 
     # Compute gt_dist to goal
-    if self.task_params.outputs.gt_dist_to_goal:
-      gt_dist_to_goal = np.zeros((len(current_node_ids), 1), dtype=np.float32)
-      for i, n in enumerate(current_node_ids):
-        gt_dist_to_goal[i,0] = self.episode.dist_to_goal[goal_number][i][n]
-      outs['gt_dist_to_goal'] = np.expand_dims(gt_dist_to_goal, axis=1)
+    #if self.task_params.outputs.gt_dist_to_goal:
+    #  gt_dist_to_goal = np.zeros((len(current_node_ids), 1), dtype=np.float32)
+    #  for i, n in enumerate(current_node_ids):
+    #    gt_dist_to_goal[i,0] = self.episode.dist_to_goal[goal_number][i][n]
+    #  outs['gt_dist_to_goal'] = np.expand_dims(gt_dist_to_goal, axis=1)
 
     # Free space in front of you, map and goal as images.
     if self.task_params.outputs.ego_maps:
@@ -1371,35 +1388,35 @@ class VisualNavigationEnv(NavigationEnv):
             np.expand_dims(np.expand_dims(maps[i], axis=1), axis=-1)
 
     # Images for the goal.
-    if self.task_params.outputs.ego_goal_imgs:
-      if self.task_params.type[:14] != 'to_nearest_obj': 
-        loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                       delta_theta=self.task.delta_theta)
-                                                       #perturb=perturbs[:,step_number,:])
-        goal_loc, _, _, _ = self.get_loc_axis(end_nodes,
-                                              delta_theta=self.task.delta_theta)
-                                              #perturb=end_perturbs[:,0,:])
-        rel_goal_orientation = np.mod(
-            np.int32(current_nodes[:,2:] - end_nodes[:,2:]), self.task_params.n_ori)
-        goal_dist, goal_theta = _get_relative_goal_loc(goal_loc, loc, theta)
-        goals = generate_goal_images(self.task_params.map_scales,
-                                     self.task_params.map_crop_sizes,
-                                     self.task_params.n_ori, goal_dist,
-                                     goal_theta, rel_goal_orientation)
-        for i in range(len(self.task_params.map_scales)):
-          outs['ego_goal_imgs_{:d}'.format(i)] = np.expand_dims(goals[i], axis=1)
+  #  if self.task_params.outputs.ego_goal_imgs:
+  #    if self.task_params.type[:14] != 'to_nearest_obj': 
+  #      loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+  #                                                     delta_theta=self.task.delta_theta)
+  #                                                     #perturb=perturbs[:,step_number,:])
+  #      goal_loc, _, _, _ = self.get_loc_axis(end_nodes,
+  #                                            delta_theta=self.task.delta_theta)
+  #                                            #perturb=end_perturbs[:,0,:])
+  #      rel_goal_orientation = np.mod(
+  #          np.int32(current_nodes[:,2:] - end_nodes[:,2:]), self.task_params.n_ori)
+  #      goal_dist, goal_theta = _get_relative_goal_loc(goal_loc, loc, theta)
+  #      goals = generate_goal_images(self.task_params.map_scales,
+  #                                   self.task_params.map_crop_sizes,
+  #                                   self.task_params.n_ori, goal_dist,
+  #                                   goal_theta, rel_goal_orientation)
+  #      for i in range(len(self.task_params.map_scales)):
+  #        outs['ego_goal_imgs_{:d}'.format(i)] = np.expand_dims(goals[i], axis=1)
 
-      elif self.task_params.type[:14] == 'to_nearest_obj':
-        for i in range(len(self.task_params.map_scales)):
-          num_classes = len(self.task_params.semantic_task.class_map_names)
-          outs['ego_goal_imgs_{:d}'.format(i)] = np.zeros((num_imgs, 1,
-                                                           self.task_params.map_crop_sizes[i],
-                                                           self.task_params.map_crop_sizes[i],
-                                                           self.task_params.goal_channels))
-        for i in range(num_imgs):
-          t = target_class[i]
-          for j in range(len(self.task_params.map_scales)):
-            outs['ego_goal_imgs_{:d}'.format(j)][i,:,:,:,t] = 1.
+  #    elif self.task_params.type[:14] == 'to_nearest_obj':
+  #      for i in range(len(self.task_params.map_scales)):
+  #        num_classes = len(self.task_params.semantic_task.class_map_names)
+  #        outs['ego_goal_imgs_{:d}'.format(i)] = np.zeros((num_imgs, 1,
+  #                                                         self.task_params.map_crop_sizes[i],
+  #                                                         self.task_params.map_crop_sizes[i],
+  #                                                         self.task_params.goal_channels))
+  #      for i in range(num_imgs):
+  #        t = target_class[i]
+  #        for j in range(len(self.task_params.map_scales)):
+  #          outs['ego_goal_imgs_{:d}'.format(j)][i,:,:,:,t] = 1.
 
     # Incremental locs and theta (for map warping), always in the original scale
     # of the map, the subequent steps in the tf code scale appropriately.
@@ -1454,8 +1471,8 @@ class VisualNavigationEnv(NavigationEnv):
 
   def get_features(self, current_node_ids, step_number):
     task_params = self.task_params
-    goal_number = step_number / self.task_params.num_steps
-    end_nodes = self.task.nodes[self.episode.goal_node_ids[goal_number],:]*1
+    #goal_number = step_number / self.task_params.num_steps
+    #end_nodes = self.task.nodes[self.episode.goal_node_ids[goal_number],:]*1
     current_nodes = self.task.nodes[current_node_ids,:]*1
     #end_perturbs = self.episode.goal_perturbs[:,goal_number,:][:,np.newaxis,:]
     #perturbs = self.episode.perturbs
@@ -1526,28 +1543,28 @@ class VisualNavigationEnv(NavigationEnv):
         outs['analytical_counts_{:d}'.format(i)] = count
 
     # Compute the goal location in the cordinate frame of the robot.
-    if self.task_params.outputs.rel_goal_loc:
-      if self.task_params.type[:14] != 'to_nearest_obj':
-        loc, _, _, theta = self.get_loc_axis(current_nodes,
-                                             delta_theta=self.task.delta_theta)
-                                             #perturb=perturbs[:,step_number,:])
-        goal_loc, _, _, goal_theta = self.get_loc_axis(end_nodes,
-                                                       delta_theta=self.task.delta_theta)
-                                                       #perturb=end_perturbs[:,0,:])
-        r_goal, t_goal = _get_relative_goal_loc(goal_loc, loc, theta)
+  #  if self.task_params.outputs.rel_goal_loc:
+  #    if self.task_params.type[:14] != 'to_nearest_obj':
+  #      loc, _, _, theta = self.get_loc_axis(current_nodes,
+  #                                           delta_theta=self.task.delta_theta)
+  #                                           #perturb=perturbs[:,step_number,:])
+  #      goal_loc, _, _, goal_theta = self.get_loc_axis(end_nodes,
+  #                                                     delta_theta=self.task.delta_theta)
+  #                                                     #perturb=end_perturbs[:,0,:])
+  #      r_goal, t_goal = _get_relative_goal_loc(goal_loc, loc, theta)
 
-        rel_goal_loc = np.concatenate((r_goal*np.cos(t_goal), r_goal*np.sin(t_goal),
-                                       np.cos(goal_theta-theta),
-                                       np.sin(goal_theta-theta)), axis=1)
-        outs['rel_goal_loc'] = np.expand_dims(rel_goal_loc, axis=1)
-      elif self.task_params.type[:14] == 'to_nearest_obj':
-        rel_goal_loc = np.zeros((self.task_params.batch_size, 1,
-                                 len(self.task_params.semantic_task.class_map_names)),
-                                dtype=np.float32)
-        for i in range(self.task_params.batch_size):
-          t = target_class[i]
-          rel_goal_loc[i,0,t] = 1.
-        outs['rel_goal_loc'] = rel_goal_loc
+  #      rel_goal_loc = np.concatenate((r_goal*np.cos(t_goal), r_goal*np.sin(t_goal),
+  #                                     np.cos(goal_theta-theta),
+  #                                     np.sin(goal_theta-theta)), axis=1)
+  #      outs['rel_goal_loc'] = np.expand_dims(rel_goal_loc, axis=1)
+  #    elif self.task_params.type[:14] == 'to_nearest_obj':
+  #      rel_goal_loc = np.zeros((self.task_params.batch_size, 1,
+  #                               len(self.task_params.semantic_task.class_map_names)),
+  #                              dtype=np.float32)
+  #      for i in range(self.task_params.batch_size):
+  #        t = target_class[i]
+  #        rel_goal_loc[i,0,t] = 1.
+  #      outs['rel_goal_loc'] = rel_goal_loc
 
     # Location on map to plot the trajectory during validation.
     if self.task_params.outputs.loc_on_map:
@@ -1557,11 +1574,11 @@ class VisualNavigationEnv(NavigationEnv):
       outs['loc_on_map'] = np.expand_dims(loc, axis=1)
 
     # Compute gt_dist to goal
-    if self.task_params.outputs.gt_dist_to_goal:
-      gt_dist_to_goal = np.zeros((len(current_node_ids), 1), dtype=np.float32)
-      for i, n in enumerate(current_node_ids):
-        gt_dist_to_goal[i,0] = self.episode.dist_to_goal[goal_number][i][n]
-      outs['gt_dist_to_goal'] = np.expand_dims(gt_dist_to_goal, axis=1)
+    #if self.task_params.outputs.gt_dist_to_goal:
+    #  gt_dist_to_goal = np.zeros((len(current_node_ids), 1), dtype=np.float32)
+    #  for i, n in enumerate(current_node_ids):
+    #    gt_dist_to_goal[i,0] = self.episode.dist_to_goal[goal_number][i][n]
+    #  outs['gt_dist_to_goal'] = np.expand_dims(gt_dist_to_goal, axis=1)
 
     # Free space in front of you, map and goal as images.
     if self.task_params.outputs.ego_maps:
@@ -1590,35 +1607,35 @@ class VisualNavigationEnv(NavigationEnv):
             np.expand_dims(np.expand_dims(maps[i], axis=1), axis=-1)
 
     # Images for the goal.
-    if self.task_params.outputs.ego_goal_imgs:
-      if self.task_params.type[:14] != 'to_nearest_obj': 
-        loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                       delta_theta=self.task.delta_theta)
-                                                       #perturb=perturbs[:,step_number,:])
-        goal_loc, _, _, _ = self.get_loc_axis(end_nodes,
-                                              delta_theta=self.task.delta_theta)
-                                              #perturb=end_perturbs[:,0,:])
-        rel_goal_orientation = np.mod(
-            np.int32(current_nodes[:,2:] - end_nodes[:,2:]), self.task_params.n_ori)
-        goal_dist, goal_theta = _get_relative_goal_loc(goal_loc, loc, theta)
-        goals = generate_goal_images(self.task_params.map_scales,
-                                     self.task_params.map_crop_sizes,
-                                     self.task_params.n_ori, goal_dist,
-                                     goal_theta, rel_goal_orientation)
-        for i in range(len(self.task_params.map_scales)):
-          outs['ego_goal_imgs_{:d}'.format(i)] = np.expand_dims(goals[i], axis=1)
+   # if self.task_params.outputs.ego_goal_imgs:
+   #   if self.task_params.type[:14] != 'to_nearest_obj': 
+   #     loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
+   #                                                    delta_theta=self.task.delta_theta)
+   #                                                    #perturb=perturbs[:,step_number,:])
+   #     goal_loc, _, _, _ = self.get_loc_axis(end_nodes,
+   #                                           delta_theta=self.task.delta_theta)
+   #                                           #perturb=end_perturbs[:,0,:])
+   #     rel_goal_orientation = np.mod(
+   #         np.int32(current_nodes[:,2:] - end_nodes[:,2:]), self.task_params.n_ori)
+   #     goal_dist, goal_theta = _get_relative_goal_loc(goal_loc, loc, theta)
+   #     goals = generate_goal_images(self.task_params.map_scales,
+   #                                  self.task_params.map_crop_sizes,
+   #                                  self.task_params.n_ori, goal_dist,
+   #                                  goal_theta, rel_goal_orientation)
+   #     for i in range(len(self.task_params.map_scales)):
+   #       outs['ego_goal_imgs_{:d}'.format(i)] = np.expand_dims(goals[i], axis=1)
 
-      elif self.task_params.type[:14] == 'to_nearest_obj':
-        for i in range(len(self.task_params.map_scales)):
-          num_classes = len(self.task_params.semantic_task.class_map_names)
-          outs['ego_goal_imgs_{:d}'.format(i)] = np.zeros((self.task_params.batch_size, 1,
-                                                           self.task_params.map_crop_sizes[i],
-                                                           self.task_params.map_crop_sizes[i],
-                                                           self.task_params.goal_channels))
-        for i in range(self.task_params.batch_size):
-          t = target_class[i]
-          for j in range(len(self.task_params.map_scales)):
-            outs['ego_goal_imgs_{:d}'.format(j)][i,:,:,:,t] = 1.
+   #   elif self.task_params.type[:14] == 'to_nearest_obj':
+   #     for i in range(len(self.task_params.map_scales)):
+   #       num_classes = len(self.task_params.semantic_task.class_map_names)
+   #       outs['ego_goal_imgs_{:d}'.format(i)] = np.zeros((self.task_params.batch_size, 1,
+   #                                                        self.task_params.map_crop_sizes[i],
+   #                                                        self.task_params.map_crop_sizes[i],
+   #                                                        self.task_params.goal_channels))
+   #     for i in range(self.task_params.batch_size):
+   #       t = target_class[i]
+   #       for j in range(len(self.task_params.map_scales)):
+   #         outs['ego_goal_imgs_{:d}'.format(j)][i,:,:,:,t] = 1.
 
     # Incremental locs and theta (for map warping), always in the original scale
     # of the map, the subequent steps in the tf code scale appropriately.
@@ -1674,21 +1691,21 @@ class VisualNavigationEnv(NavigationEnv):
     f = []
     if self.task_params.outputs.images:
       f.append('imgs')
-    if self.task_params.outputs.rel_goal_loc:
-      f.append('rel_goal_loc')
+    #if self.task_params.outputs.rel_goal_loc:
+    #  f.append('rel_goal_loc')
     if self.task_params.outputs.loc_on_map:
       f.append('loc_on_map')
-    if self.task_params.outputs.gt_dist_to_goal:
-      f.append('gt_dist_to_goal')
+    #if self.task_params.outputs.gt_dist_to_goal:
+    #  f.append('gt_dist_to_goal')
     if self.task_params.outputs.ego_maps:
       for i in range(len(self.task_params.map_scales)):
         f.append('ego_maps_{:d}'.format(i))
     if self.task_params.outputs.readout_maps:
       for i in range(len(self.task_params.readout_maps_scales)):
         f.append('readout_maps_{:d}'.format(i))
-    if self.task_params.outputs.ego_goal_imgs:
-      for i in range(len(self.task_params.map_scales)):
-        f.append('ego_goal_imgs_{:d}'.format(i))
+    #if self.task_params.outputs.ego_goal_imgs:
+    #  for i in range(len(self.task_params.map_scales)):
+    #    f.append('ego_goal_imgs_{:d}'.format(i))
     if self.task_params.outputs.egomotion:
       f.append('incremental_locs')
       f.append('incremental_thetas')

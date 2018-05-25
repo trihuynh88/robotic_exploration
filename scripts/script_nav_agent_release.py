@@ -379,7 +379,7 @@ def _train(args):
   #tmp setting TRI
   args.solver.max_steps = 500000
   args.solver.steps_per_decay = 50000
-  args.solver.initial_learning_rate = 1e-7
+  args.solver.initial_learning_rate = 1e-8
   args.navtask.task_params.batch_size = 32
 
   #pdb.set_trace()
@@ -390,7 +390,7 @@ def _train(args):
 
   #Tri
   #add a cloned building object for checking the exploration result during training
-  m.cloned_obj = R()
+  #m.cloned_obj = R()
   m.batch_size = args.navtask.task_params.batch_size
   m.train_type = 0
   m.is_first_step = True
@@ -409,6 +409,7 @@ def _train(args):
     with tf.device(tf.train.replica_device_setter(args.solver.ps_tasks,
                                           merge_devices=True)):
       with tf.container(container_name):
+        #pdb.set_trace()
         m = args.setup_to_run(m, args, is_training=True,
                              batch_norm_is_training=True, summary_mode='train')
 
@@ -422,19 +423,19 @@ def _train(args):
         with tf.variable_scope('cloned'):
           m_cloned = args.setup_to_run(m_cloned, args, is_training=True,
                              batch_norm_is_training=True, summary_mode='train')
-
+        #pdb.set_trace()
         clonemodel(m,m_cloned)
         set_copying_ops(m)
         m.init_op = tf.group(tf.global_variables_initializer(),
                          tf.local_variables_initializer())
-
+        #pdb.set_trace()
         train_step_kwargs = args.setup_train_step_kwargs(
             m, R(), os.path.join(args.logdir, 'train'), rng_seed=args.solver.task,
             is_chief=args.solver.task==0,
             num_steps=args.navtask.task_params.num_steps*args.navtask.task_params.num_goals, iters=1,
             train_display_interval=args.summary.display_interval,
             dagger_sample_bn_false=args.arch.dagger_sample_bn_false)
-
+        #pdb.set_trace()
         delay_start = (args.solver.task*(args.solver.task+1))/2 * FLAGS.delay_start_iters
         logging.error('delaying start for task %d by %d steps.',
                       args.solver.task, delay_start)
@@ -451,7 +452,8 @@ def _train(args):
         #m.e2 = obj.sample_env(rng_data)
         #m.init_env_state2 = m.e2.reset(rng_data)
         m.rng_data = deepcopy(rng_data)
-        
+       
+        #pdb.set_trace() 
         additional_args = {}
         final_loss = slim.learning.train(
             train_op=m.train_op,
@@ -487,7 +489,7 @@ def _test(args):
   #Tri tmp
   args.navtask.building_names = ['area1']
   R = lambda: nav_env.get_multiplexer_class(args.navtask, rng_data_seed)
-  m.cloned_obj = R()
+  #m.cloned_obj = R()
 
   with m.tf_graph.as_default():
     with tf.container(container_name):

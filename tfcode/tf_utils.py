@@ -398,7 +398,7 @@ def inference_test_elem(sess,m,writer,e,init_env_state,dagger_sample_bn_false,rn
     #run_copying_ops(sess,m.copying_ops)
     cur_state = init_env_state
     total_rewards = np.zeros(len(init_env_state))
-    for j in range(0,m.rl_num_explore_steps):
+    for j in range(0,m.rl_num_explore_steps_test):
       if bool_save_imgs:
 	      jstr = ("%03d"%j)
 	      for im_ind in range(len(init_env_state)):
@@ -489,7 +489,7 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  dirpath = "test_maps_b32_lre7_decay50000_df099_exp50000_step200_reusevars_noperturb"
+  dirpath = "test_maps_b32_lre8_decay50000_df099_exp50000_step500_reusevars_noperturb_nogoal"
   #dirpath = "test_maps_debug"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
@@ -523,6 +523,7 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
 
 def train_step_custom_online_sampling(sess, train_op, global_step,
                                       train_step_kwargs, mode='train'):
+  #pdb.set_trace()
   m          = train_step_kwargs['m']
   obj        = train_step_kwargs['obj']
   rng_data   = train_step_kwargs['rng_data']
@@ -556,12 +557,14 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
                    v[i].name, np.any(np.isnan(v_op_value[i])),
                    np.linalg.norm(v_op_value[i]))
 
+  #pdb.set_trace()
   tt = utils.Timer()
   n_step = sess.run(global_step)
   print 'n_step = '+str(n_step)
   if n_step>(m.save_reward_step*m.save_reward_count):
     m.save_reward_count = m.save_reward_count+1
-    inference_test(sess,m.cloned_obj,m,writer,dagger_sample_bn_false,rng_action,n_step)
+    #inference_test(sess,m.cloned_obj,m,writer,dagger_sample_bn_false,rng_action,n_step)
+    inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step)
 
 
   if (mode=='train'):
@@ -786,7 +789,8 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	      cur_state = next_state_tri
 
   else:
-    inference_test(sess,m.cloned_obj,m,None,dagger_sample_bn_false,rng_action,n_step)
+    #inference_test(sess,m.cloned_obj,m,None,dagger_sample_bn_false,rng_action,n_step)
+    inference_test(sess,obj,m,None,dagger_sample_bn_false,rng_action,n_step)
     total_loss = 0
     should_stop = False
    
@@ -1068,6 +1072,7 @@ def setup_training(loss_op, initial_learning_rate, steps_per_decay,
                                                    clip_gradient_norm=clip_gradient_norm)
   else:
     sync_optimizer = None
+    #pdb.set_trace()
     train_op       = slim.learning.create_train_op(loss_op, optimizer,
                                                    variables_to_train=vars_to_optimize,
                                                    clip_gradient_norm=clip_gradient_norm)
