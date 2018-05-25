@@ -489,7 +489,7 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  dirpath = "test_maps_b32_lre8_decay50000_df099_exp50000_step500_reusevars_noperturb_nogoal"
+  dirpath = "test_maps_b32_lre8_decay50000_df099_exp50000_step500_reusevars_nogoal_traintype1"
   #dirpath = "test_maps_debug"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
