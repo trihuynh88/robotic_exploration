@@ -392,7 +392,7 @@ def _train(args):
   #add a cloned building object for checking the exploration result during training
   #m.cloned_obj = R()
   m.batch_size = args.navtask.task_params.batch_size
-  m.train_type = 1
+  m.train_type = 0
   m.is_first_step = True
   m.save_pic_step = 10000
   m.save_pic_count = 0

@@ -546,13 +546,13 @@ class MeshMapper(Building):
         instances.append(instance)
 
     # Do random perturbation if needed.
-    perturbs = _gen_perturbs(rng, self.task_params.batch_size,
-                             self.task_params.num_steps,
-                             self.task_params.data_augment.lr_flip,
-                             self.task_params.data_augment.delta_angle,
-                             self.task_params.data_augment.delta_xy,
-                             self.task_params.data_augment.structured)
-    #perturbs = None
+    #perturbs = _gen_perturbs(rng, self.task_params.batch_size,
+    #                         self.task_params.num_steps,
+    #                         self.task_params.data_augment.lr_flip,
+    #                         self.task_params.data_augment.delta_angle,
+    #                         self.task_params.data_augment.delta_xy,
+    #                         self.task_params.data_augment.structured)
+    perturbs = None
     return instances, perturbs
 
   def worker(self, instances, perturbs):
@@ -562,21 +562,21 @@ class MeshMapper(Building):
     for i in range(len(instances)):
       for j in range(self.task_params.num_steps - len(instances[i]) + 1):
         instances[i].append(instances[i][-1])
-      if perturbs[i].shape[0] < self.task_params.num_steps+1:
-        p = np.zeros((self.task_params.num_steps+1, 4))
-        p[:perturbs[i].shape[0], :] = perturbs[i]
-        p[perturbs[i].shape[0]:, :] = perturbs[i][-1,:]
-        perturbs[i] = p
+      #if perturbs[i].shape[0] < self.task_params.num_steps+1:
+      #  p = np.zeros((self.task_params.num_steps+1, 4))
+      #  p[:perturbs[i].shape[0], :] = perturbs[i]
+      #  p[perturbs[i].shape[0]:, :] = perturbs[i][-1,:]
+      #  perturbs[i] = p
 
     instances_ = []
     for instance in instances:
       instances_ = instances_ + instance
-    perturbs_ = np.concatenate(perturbs, axis=0)
+    #perturbs_ = np.concatenate(perturbs, axis=0)
 
     instances_nodes = self.task.nodes[instances_,:]
     instances_nodes = [tuple(x) for x in instances_nodes]
 
-    imgs_ = self.render_nodes(instances_nodes, perturbs_)
+    imgs_ = self.render_nodes(instances_nodes)#, perturbs_)
     imgs = []; next = 0;
     for instance in instances:
       img_i = []
@@ -591,10 +591,10 @@ class MeshMapper(Building):
     all_nodes = []
     for x in instances:
       all_nodes = all_nodes + x
-    all_perturbs = np.concatenate(perturbs, axis=0)
+    #all_perturbs = np.concatenate(perturbs, axis=0)
     loc, x_axis, y_axis, theta = self.get_loc_axis(
-        self.task.nodes[all_nodes, :]*1, delta_theta=self.task.delta_theta,
-        perturb=all_perturbs)
+        self.task.nodes[all_nodes, :]*1, delta_theta=self.task.delta_theta)
+        #perturb=all_perturbs)
     fss = None
     valids = None
     loc_on_map = None
@@ -956,7 +956,7 @@ class NavigationEnv(GridWorld, Building):
         self._debug_save_map_nodes(seed)
 
   def reset(self, rngs):
-    rng = rngs[0]; rng_perturb = rngs[1];
+    rng = rngs[0]; #rng_perturb = rngs[1];
     nodes = self.task.nodes
     tp = self.task_params
 
@@ -980,14 +980,14 @@ class NavigationEnv(GridWorld, Building):
     target_class = None
 
     data_augment = tp.data_augment
-    perturbs = _gen_perturbs(rng_perturb, tp.batch_size,
-                             (tp.num_steps+1)*tp.num_goals,
-                             data_augment.lr_flip, data_augment.delta_angle,
-                             data_augment.delta_xy, data_augment.structured)
-    perturbs = np.array(perturbs) # batch x steps x 4
+    #perturbs = _gen_perturbs(rng_perturb, tp.batch_size,
+    #                         (tp.num_steps+1)*tp.num_goals,
+    #                         data_augment.lr_flip, data_augment.delta_angle,
+    #                         data_augment.delta_xy, data_augment.structured)
+    #perturbs = np.array(perturbs) # batch x steps x 4
     #end_perturbs = perturbs[:,-(tp.num_goals):,:]*1 # fixed perturb for the goal.
-    perturbs = perturbs[:,:-(tp.num_goals),:]*1
-    #perturbs = None
+    #perturbs = perturbs[:,:-(tp.num_goals),:]*1
+    perturbs = None
     end_perturbs = None
 
     history = -np.ones((tp.batch_size, tp.num_steps*tp.num_goals), dtype=np.int32)
@@ -1007,7 +1007,7 @@ class NavigationEnv(GridWorld, Building):
     return start_node_ids
 
   def reset_n_nodes(self, rngs, n_num):
-    rng = rngs[0]; rng_perturb = rngs[1];
+    rng = rngs[0]; #rng_perturb = rngs[1];
     nodes = self.task.nodes
     tp = self.task_params
 
@@ -1027,14 +1027,14 @@ class NavigationEnv(GridWorld, Building):
 
     data_augment = tp.data_augment
     #pdb.set_trace()
-    perturbs = _gen_perturbs(rng_perturb, n_num,
-                             (tp.num_steps+1)*tp.num_goals,
-                             data_augment.lr_flip, data_augment.delta_angle,
-                             data_augment.delta_xy, data_augment.structured)
-    perturbs = np.array(perturbs) # batch x steps x 4
+    #perturbs = _gen_perturbs(rng_perturb, n_num,
+    #                         (tp.num_steps+1)*tp.num_goals,
+    #                         data_augment.lr_flip, data_augment.delta_angle,
+    #                         data_augment.delta_xy, data_augment.structured)
+    #perturbs = np.array(perturbs) # batch x steps x 4
     #end_perturbs = perturbs[:,-(tp.num_goals):,:]*1 # fixed perturb for the goal.
-    perturbs = perturbs[:,:-(tp.num_goals),:]*1
-    #perturbs = None
+    #perturbs = perturbs[:,:-(tp.num_goals),:]*1
+    perturbs = None
     end_perturbs = None
 
     history = -np.ones((n_num, tp.num_steps*tp.num_goals), dtype=np.int32)
@@ -1197,7 +1197,7 @@ class VisualNavigationEnv(NavigationEnv):
   def get_common_data(self):
     goal_nodes = self.episode.goal_nodes
     start_nodes = self.episode.start_nodes
-    perturbs = self.episode.perturbs
+    #perturbs = self.episode.perturbs
     #goal_perturbs = self.episode.goal_perturbs
     target_class = self.episode.target_class
 
@@ -1210,8 +1210,8 @@ class VisualNavigationEnv(NavigationEnv):
 
       # Compute the relative location to all goals from the starting location.
       loc, _, _, theta = self.get_loc_axis(np.array(start_nodes),
-                                           delta_theta=self.task.delta_theta,
-                                           perturb=perturbs[:,0,:])
+                                           delta_theta=self.task.delta_theta)
+                                           #perturb=perturbs[:,0,:])
       r_goal, t_goal = _get_relative_goal_loc(goal_loc*1., loc, theta)
       rel_goal_loc = np.concatenate((r_goal*np.cos(t_goal), r_goal*np.sin(t_goal),
                                      np.cos(goal_theta-theta),
@@ -1256,7 +1256,7 @@ class VisualNavigationEnv(NavigationEnv):
     #end_nodes = self.task.nodes[self.episode.goal_node_ids[goal_number],:]*1
     current_nodes = self.task.nodes[current_node_ids,:]*1
     #end_perturbs = self.episode.goal_perturbs[:,goal_number,:][:,np.newaxis,:]
-    perturbs = self.episode.perturbs
+    #perturbs = self.episode.perturbs
     target_class = self.episode.target_class
 
     # Append to history.
@@ -1267,13 +1267,13 @@ class VisualNavigationEnv(NavigationEnv):
 
     if self.task_params.outputs.images:
       imgs_all = []
-      imgs = self.render_nodes([tuple(x) for x in current_nodes],
-                               perturb=perturbs[:,step_number,:])
+      imgs = self.render_nodes([tuple(x) for x in current_nodes])
+                               #perturb=perturbs[:,step_number,:])
       imgs_all.append(imgs)
       aux_delta_thetas = self.task_params.aux_delta_thetas
       for i in range(len(aux_delta_thetas)):
         imgs = self.render_nodes([tuple(x) for x in current_nodes],
-                                 perturb=perturbs[:,step_number,:],
+                                 #perturb=perturbs[:,step_number,:],
                                  aux_delta_theta=aux_delta_thetas[i])
         imgs_all.append(imgs)
       imgs_all = np.array(imgs_all) # A x B x H x W x C
@@ -1293,7 +1293,7 @@ class VisualNavigationEnv(NavigationEnv):
 
     if self.task_params.outputs.node_ids:
       outs['node_ids'] = np.array(current_node_ids).reshape((-1,1,1))
-      outs['perturbs'] = np.expand_dims(perturbs[:,step_number, :]*1., axis=1)
+      #outs['perturbs'] = np.expand_dims(perturbs[:,step_number, :]*1., axis=1)
 
     if self.task_params.outputs.analytical_counts:
       assert(self.task_params.modalities == ['depth'])
@@ -1350,8 +1350,8 @@ class VisualNavigationEnv(NavigationEnv):
     # Location on map to plot the trajectory during validation.
     if self.task_params.outputs.loc_on_map:
       loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                     delta_theta=self.task.delta_theta,
-                                                     perturb=perturbs[:,step_number,:])
+                                                     delta_theta=self.task.delta_theta)
+                                                     #perturb=perturbs[:,step_number,:])
       outs['loc_on_map'] = np.expand_dims(loc, axis=1)
 
     # Compute gt_dist to goal
@@ -1364,8 +1364,8 @@ class VisualNavigationEnv(NavigationEnv):
     # Free space in front of you, map and goal as images.
     if self.task_params.outputs.ego_maps:
       loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                     delta_theta=self.task.delta_theta,
-                                                     perturb=perturbs[:,step_number,:])
+                                                     delta_theta=self.task.delta_theta)
+                                                     #perturb=perturbs[:,step_number,:])
       maps = generate_egocentric_maps(self.task.scaled_maps,
                                       self.task_params.map_scales,
                                       self.task_params.map_crop_sizes, loc,
@@ -1377,8 +1377,8 @@ class VisualNavigationEnv(NavigationEnv):
 
     if self.task_params.outputs.readout_maps:
       loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                     delta_theta=self.task.delta_theta,
-                                                     perturb=perturbs[:,step_number,:])
+                                                     delta_theta=self.task.delta_theta)
+                                                     #perturb=perturbs[:,step_number,:])
       maps = generate_egocentric_maps(self.task.readout_maps_scaled,
                                       self.task_params.readout_maps_scales,
                                       self.task_params.readout_maps_crop_sizes,
@@ -1429,11 +1429,11 @@ class VisualNavigationEnv(NavigationEnv):
       else:
         previous_nodes = self.task.nodes[self.episode.history[:,step_number-1], :]*1
         loc, _, _, theta = self.get_loc_axis(current_nodes,
-                                             delta_theta=self.task.delta_theta,
-                                             perturb=perturbs[:,step_number,:])
+                                             delta_theta=self.task.delta_theta)
+                                             #perturb=perturbs[:,step_number,:])
         previous_loc, _, _, previous_theta = self.get_loc_axis(
-            previous_nodes, delta_theta=self.task.delta_theta,
-            perturb=perturbs[:,step_number-1,:])
+            previous_nodes, delta_theta=self.task.delta_theta)
+            #perturb=perturbs[:,step_number-1,:])
 
         incremental_locs_ = np.reshape(loc-previous_loc, [num_imgs, 1, -1])
 
@@ -1475,7 +1475,7 @@ class VisualNavigationEnv(NavigationEnv):
     #end_nodes = self.task.nodes[self.episode.goal_node_ids[goal_number],:]*1
     current_nodes = self.task.nodes[current_node_ids,:]*1
     #end_perturbs = self.episode.goal_perturbs[:,goal_number,:][:,np.newaxis,:]
-    perturbs = self.episode.perturbs
+    #perturbs = self.episode.perturbs
     target_class = self.episode.target_class
 
     # Append to history.
@@ -1486,13 +1486,13 @@ class VisualNavigationEnv(NavigationEnv):
 
     if self.task_params.outputs.images:
       imgs_all = []
-      imgs = self.render_nodes([tuple(x) for x in current_nodes],
-                               perturb=perturbs[:,step_number,:])
+      imgs = self.render_nodes([tuple(x) for x in current_nodes])
+                               #perturb=perturbs[:,step_number,:])
       imgs_all.append(imgs)
       aux_delta_thetas = self.task_params.aux_delta_thetas
       for i in range(len(aux_delta_thetas)):
         imgs = self.render_nodes([tuple(x) for x in current_nodes],
-                                 perturb=perturbs[:,step_number,:],
+                                 #perturb=perturbs[:,step_number,:],
                                  aux_delta_theta=aux_delta_thetas[i])
         imgs_all.append(imgs)
       imgs_all = np.array(imgs_all) # A x B x H x W x C
@@ -1512,7 +1512,7 @@ class VisualNavigationEnv(NavigationEnv):
 
     if self.task_params.outputs.node_ids:
       outs['node_ids'] = np.array(current_node_ids).reshape((-1,1,1))
-      outs['perturbs'] = np.expand_dims(perturbs[:,step_number, :]*1., axis=1)
+      #outs['perturbs'] = np.expand_dims(perturbs[:,step_number, :]*1., axis=1)
 
     if self.task_params.outputs.analytical_counts:
       assert(self.task_params.modalities == ['depth'])
@@ -1569,8 +1569,8 @@ class VisualNavigationEnv(NavigationEnv):
     # Location on map to plot the trajectory during validation.
     if self.task_params.outputs.loc_on_map:
       loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                     delta_theta=self.task.delta_theta,
-                                                     perturb=perturbs[:,step_number,:])
+                                                     delta_theta=self.task.delta_theta)
+                                                     #perturb=perturbs[:,step_number,:])
       outs['loc_on_map'] = np.expand_dims(loc, axis=1)
 
     # Compute gt_dist to goal
@@ -1583,8 +1583,8 @@ class VisualNavigationEnv(NavigationEnv):
     # Free space in front of you, map and goal as images.
     if self.task_params.outputs.ego_maps:
       loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                     delta_theta=self.task.delta_theta,
-                                                     perturb=perturbs[:,step_number,:])
+                                                     delta_theta=self.task.delta_theta)
+                                                     #perturb=perturbs[:,step_number,:])
       maps = generate_egocentric_maps(self.task.scaled_maps,
                                       self.task_params.map_scales,
                                       self.task_params.map_crop_sizes, loc,
@@ -1596,8 +1596,8 @@ class VisualNavigationEnv(NavigationEnv):
 
     if self.task_params.outputs.readout_maps:
       loc, x_axis, y_axis, theta = self.get_loc_axis(current_nodes,
-                                                     delta_theta=self.task.delta_theta,
-                                                     perturb=perturbs[:,step_number,:])
+                                                     delta_theta=self.task.delta_theta)
+                                                     #perturb=perturbs[:,step_number,:])
       maps = generate_egocentric_maps(self.task.readout_maps_scaled,
                                       self.task_params.readout_maps_scales,
                                       self.task_params.readout_maps_crop_sizes,
@@ -1648,11 +1648,11 @@ class VisualNavigationEnv(NavigationEnv):
       else:
         previous_nodes = self.task.nodes[self.episode.history[:,step_number-1], :]*1
         loc, _, _, theta = self.get_loc_axis(current_nodes,
-                                             delta_theta=self.task.delta_theta,
-                                             perturb=perturbs[:,step_number,:])
+                                             delta_theta=self.task.delta_theta)
+                                             #perturb=perturbs[:,step_number,:])
         previous_loc, _, _, previous_theta = self.get_loc_axis(
-            previous_nodes, delta_theta=self.task.delta_theta,
-            perturb=perturbs[:,step_number-1,:])
+            previous_nodes, delta_theta=self.task.delta_theta)
+            #perturb=perturbs[:,step_number-1,:])
 
         incremental_locs_ = np.reshape(loc-previous_loc, [self.task_params.batch_size, 1, -1])
 
@@ -1717,7 +1717,7 @@ class VisualNavigationEnv(NavigationEnv):
         f.append('analytical_counts_{:d}'.format(i))
     if self.task_params.outputs.node_ids:
       f.append('node_ids')
-      f.append('perturbs')
+      #f.append('perturbs')
     return f
 
   def pre_features(self, inputs):
