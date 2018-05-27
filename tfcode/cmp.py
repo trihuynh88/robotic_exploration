@@ -374,16 +374,16 @@ def set_copying_ops(m):
   m.copying_ops = copying_ops
 
 def set_tmp_params(m):
-  m.rl_num_explore_steps = 500
+  m.rl_num_explore_steps = 1000
   m.rl_num_explore_steps_test = 1000
-  m.rl_datapool_size = 10000
+  m.rl_datapool_size = 1000
   m.rl_datapool = []
   m.rl_discount_factor = 0.99
   m.rl_rand_act_prob_start = 1.0
   m.rl_rand_act_prob_end = 0.1
-  m.rl_rand_act_anneal_time = 50000
-  m.rl_target_net_update_freq = 5000
-  m.rl_replay_start_size = 1000
+  m.rl_rand_act_anneal_time = 100000
+  m.rl_target_net_update_freq = 1000
+  m.rl_replay_start_size = 100
 
 def _inputs(problem):
   # Set up inputs.
