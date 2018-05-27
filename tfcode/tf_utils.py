@@ -489,8 +489,8 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  dirpath = "test_maps_b32_lre8_decay50000_df099_exp100000_step1000_reusevars_noperturb_nogoal_traintype1_suffle"
-  #dirpath = "test_maps_debug"
+  #dirpath = "test_maps_b32_lre8_decay50000_df099_exp100000_step1000_reusevars_noperturb_nogoal_traintype1_suffle"
+  dirpath = "test_maps_debug"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
   n_step_str = ("%05d" % n_step)
@@ -640,171 +640,189 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	    #temporary
 	    #run_copying_ops(sess,m.copying_ops)
 	    cur_state = init_env_state
-	    for j in range(0,m.rl_num_explore_steps):
+	    #for j in range(0,m.rl_num_explore_steps):
+            j = 0
+            while j<m.rl_num_explore_steps:
 	      #f = e.get_features(states[j], j)
 	      #f = e.pre_features(f)
 	      #f.update(net_state)
 	      #f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
 	      #state_features.append(f)
-
+              feed_dict_first = feed_dict
+              #discount_vec_first = np.ones(m.batch_size)*m.rl_discount_factor
+              cur_discount = 1
+              prev_rewards = np.zeros(m.batch_size)
 	      #feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
 	      #optimal_action = e.get_optimal_action(states[j], j)
 	      #for x, v in zip(m.train_ops['common'], common_data):
 	      #  feed_dict[x] = v
 	      #if dagger_sample_bn_false:
 	      #  feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-	      outs = sess.run(#[m.train_ops['step'], #m.sample_gt_prob_op,
-			       #m.train_ops['step_data_cache'],
-			       [m.train_ops['updated_state'],
-			       #m.train_ops['outputs'],
-			       m.action_logits_op], feed_dict=feed_dict)
-	      #action_probs = outs[0]
-	      #sample_gt_prob = outs[1]
-	      #step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
-	      net_state = outs[0]
-	      action_logits = outs[1]
-	      #if hasattr(e, 'update_state'):
-	      #  outputs = outs[2]
-	      #  outputs = dict(zip(m.train_ops['output_names'], outputs))
-	      #  e.update_state(outputs, j)
-	      #state_targets.append(e.get_targets(states[j], j))
+              for k in range(0,m.rl_num_rollout):
+	        outs = sess.run(#[m.train_ops['step'], #m.sample_gt_prob_op,
+	          	       #m.train_ops['step_data_cache'],
+	          	       [m.train_ops['updated_state'],
+	          	       #m.train_ops['outputs'],
+	          	       m.action_logits_op], feed_dict=feed_dict)
+	        #action_probs = outs[0]
+	        #sample_gt_prob = outs[1]
+	        #step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
+	        net_state = outs[0]
+	        action_logits = outs[1]
+	        #if hasattr(e, 'update_state'):
+	        #  outputs = outs[2]
+	        #  outputs = dict(zip(m.train_ops['output_names'], outputs))
+	        #  e.update_state(outputs, j)
+	        #state_targets.append(e.get_targets(states[j], j))
 
-	      #if j < num_steps-1:
-	      # Sample from action_probs and optimal action.
-	      #action, action_sample_wt = sample_action(
-	      #    rng_action, action_probs, optimal_action, sample_gt_prob,
-	      #    m.sample_action_type, m.sample_action_combine_type)
-	      #next_state, reward = e.take_action(states[j], action, j)
-	      #Tri
-	      action_tri = np.argmax(action_logits,axis=-1)
+	        #if j < num_steps-1:
+	        # Sample from action_probs and optimal action.
+	        #action, action_sample_wt = sample_action(
+	        #    rng_action, action_probs, optimal_action, sample_gt_prob,
+	        #    m.sample_action_type, m.sample_action_combine_type)
+	        #next_state, reward = e.take_action(states[j], action, j)
+	        #Tri
+	        action_tri = np.argmax(action_logits,axis=-1)
 
-	      
-	      #save map images to test if the network learned something
-	      cur_eps = rl_get_rand_fact(n_step,m)
-	      action_taken = rl_sample_action(cur_eps, action_tri, m)
-	      #pdb.set_trace()
-	      #next_state_tri, reward_tri = e.take_action_and_explore(states[j],action_taken)
-	      next_state_tri, reward_tri = e.take_action_and_explore(cur_state,action_taken)
-	      #executed_actions.append(action)   #old code, needs to be updated
-	      #states.append(next_state_tri)
-	      #rewards.append(reward_tri)
-	      #action_sample_wts.append(action_sample_wt)
-	      net_state = dict(zip(m.train_ops['state_names'], net_state))
-	      #net_state_to_input.append(net_state)
-	      #reordered from the top, preparing the next feed_dict
-	      #temporarily backup the old variable for testing (this var is not neccessary in the new rl framework)
-	      #optimal_action_prev = optimal_action
-	      #new_datapool_elem = [optimal_action]
-	      new_datapool_elem = [feed_dict]
-	      #new_datapool_elem.append(feed_dict)
-	      #f = e.get_features(states[j+1], j+1)
-	      #pdb.set_trace()
-	      f = e.get_features_tri(next_state_tri, j+1)
-	      f = e.pre_features(f)
-	      f.update(net_state)
-	      f['step_number'] = np.ones((1,1,1), dtype=np.int32)*(j+1)
-	      #state_features.append(f)
+	        
+	        #save map images to test if the network learned something
+	        cur_eps = rl_get_rand_fact(n_step,m)
+	        action_taken = rl_sample_action(cur_eps, action_tri, m)
+                if (k==0):
+                  action_taken_first = action_taken
+	        #pdb.set_trace()
+	        #next_state_tri, reward_tri = e.take_action_and_explore(states[j],action_taken)
+	        next_state_tri, reward_tri = e.take_action_and_explore(cur_state,action_taken)
+	        #executed_actions.append(action)   #old code, needs to be updated
+	        #states.append(next_state_tri)
+	        #rewards.append(reward_tri)
+	        #action_sample_wts.append(action_sample_wt)
+	        net_state = dict(zip(m.train_ops['state_names'], net_state))
+	        #net_state_to_input.append(net_state)
+	        #reordered from the top, preparing the next feed_dict
+	        #temporarily backup the old variable for testing (this var is not neccessary in the new rl framework)
+	        #optimal_action_prev = optimal_action
+	        #new_datapool_elem = [optimal_action]
+	        new_datapool_elem = [feed_dict_first]
+	        #new_datapool_elem.append(feed_dict)
+	        #f = e.get_features(states[j+1], j+1)
+	        #pdb.set_trace()
+	        f = e.get_features_tri(next_state_tri, j+1)
+	        f = e.pre_features(f)
+	        f.update(net_state)
+	        f['step_number'] = np.ones((1,1,1), dtype=np.int32)*(j+1)
+	        #state_features.append(f)
 
-	      #feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
-	      feed_dict = prepare_feed_dict(m.input_tensors['step'], f)
-	      #optimal_action = e.get_optimal_action(states[j+1], j+1)
-	      #for x, v in zip(m.train_ops['common'], common_data):
-	      #  feed_dict[x] = v
-	      if dagger_sample_bn_false:
-		feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-	      
-	      #cloned_feed_dict = copy_feed_dict_to_namespace(feed_dict,m)
-	      #pdb.set_trace()
-	      #new_datapool_elem.append(cloned_feed_dict)
-              new_datapool_elem.append(feed_dict)
-	      new_datapool_elem.append(action_taken[:,np.newaxis])
-	      new_datapool_elem.append(reward_tri)
-	      #m.rl_datapool.append(new_datapool_elem)
-	      add_elem_datapool(new_datapool_elem,m)
+	        #feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
+	        feed_dict = prepare_feed_dict(m.input_tensors['step'], f)
+	        #optimal_action = e.get_optimal_action(states[j+1], j+1)
+	        #for x, v in zip(m.train_ops['common'], common_data):
+	        #  feed_dict[x] = v
+	        if dagger_sample_bn_false:
+	          feed_dict[m.train_ops['batch_norm_is_training_op']] = False
+	        
+	        #cloned_feed_dict = copy_feed_dict_to_namespace(feed_dict,m)
+	        #pdb.set_trace()
+	        #new_datapool_elem.append(cloned_feed_dict)
+                new_datapool_elem.append(feed_dict)
+	        new_datapool_elem.append(action_taken_first[:,np.newaxis])
+                cur_rewards = prev_rewards + cur_discount*reward_tri
+	        new_datapool_elem.append(cur_rewards)
+                prev_rewards = cur_rewards
+                cur_discount = cur_discount*m.rl_discount_factor
+                new_datapool_elem.append(np.ones(m.batch_size)*cur_discount)
+	        #m.rl_datapool.append(new_datapool_elem)
+	        add_elem_datapool(new_datapool_elem,m)
 
-	      #prepare for training of one step
+	        #prepare for training of one step
 
-	      #new code: prepare bigger batch size for training by concatenating data in datapool
-	      #pdb.set_trace()
-	      #batch_size = 32
-	      if len(m.rl_datapool)>=m.rl_replay_start_size:
-		      #pick an elemen from datapool
-                      if m.train_type == 0:
-			      first_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)] 
-			      picked_pool_elem = []
-			      for elemind in range(2):
-				picked_pool_elem.append({}) 
-				for key, value in first_pool_elem[elemind].iteritems():
-				  picked_pool_elem[elemind][key] = first_pool_elem[elemind][key]
-			      picked_pool_elem.append(first_pool_elem[2])
-			      picked_pool_elem.append(first_pool_elem[3])
+	        #new code: prepare bigger batch size for training by concatenating data in datapool
+	        #pdb.set_trace()
+	        #batch_size = 32
+	        if len(m.rl_datapool)>=m.rl_replay_start_size:
+	                #pick an elemen from datapool
+                        if m.train_type == 0:
+	          	      first_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)] 
+	          	      picked_pool_elem = []
+	          	      for elemind in range(2):
+	          		picked_pool_elem.append({}) 
+	          		for key, value in first_pool_elem[elemind].iteritems():
+	          		  picked_pool_elem[elemind][key] = first_pool_elem[elemind][key]
+	          	      picked_pool_elem.append(first_pool_elem[2])
+	          	      picked_pool_elem.append(first_pool_elem[3])
+                              picked_pool_elem.append(first_pool_elem[4])
 
-			      #pdb.set_trace()
-			      for pickind in range(m.batch_size-1):
-				pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
-				for elemind in range(2):
-				  for key, value in pool_elem[elemind].iteritems():
-				    if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0'): #and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
-				      picked_pool_elem[elemind][key] = np.concatenate((picked_pool_elem[elemind][key],value))
-				picked_pool_elem[2] = np.concatenate((picked_pool_elem[2],pool_elem[2]))
-				picked_pool_elem[3] = np.concatenate((picked_pool_elem[3],pool_elem[3]))
-                      else:
-                              #pdb.set_trace()
-                              #picked_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
-                              first_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
-                              picked_pool_elem = []
-                              for elemind in range(2):
-                                picked_pool_elem.append({})
-                                for key, value in first_pool_elem[elemind].iteritems():
-                                  picked_pool_elem[elemind][key] = np.copy(first_pool_elem[elemind][key])
-                              picked_pool_elem.append(np.copy(first_pool_elem[2]))
-                              picked_pool_elem.append(np.copy(first_pool_elem[3]))
-                              
-                              for pickind in range(m.batch_size-1):
-                                pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
+	          	      #pdb.set_trace()
+	          	      for pickind in range(m.batch_size-1):
+	          		pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
+	          		for elemind in range(2):
+	          		  for key, value in pool_elem[elemind].iteritems():
+	          		    if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0'): #and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
+	          		      picked_pool_elem[elemind][key] = np.concatenate((picked_pool_elem[elemind][key],value))
+	          		picked_pool_elem[2] = np.concatenate((picked_pool_elem[2],pool_elem[2]))
+	          		picked_pool_elem[3] = np.concatenate((picked_pool_elem[3],pool_elem[3]))
+                                picked_pool_elem[4] = np.concatenate((picked_pool_elem[4],pool_elem[4]))
+                        else:
+                                #pdb.set_trace()
+                                #picked_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
+                                first_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
+                                picked_pool_elem = []
                                 for elemind in range(2):
-                                  for key, value in pool_elem[elemind].iteritems():
-                                    if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0'): #and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
-                                      picked_pool_elem[elemind][key][pickind] = value[pickind]
-                                picked_pool_elem[2][pickind] = pool_elem[2][pickind]
-                                picked_pool_elem[3][pickind] = pool_elem[3][pickind]
-			
-		      #prepare target (y) values 
-		      dic1_train = picked_pool_elem[0]
-		      dic2_train = picked_pool_elem[1]
-		      reward_train = picked_pool_elem[3]
-		      action_train = picked_pool_elem[2]
-		      #action_tmp = picked_pool_elem[0]
-		      #pdb.set_trace()
-		      out_target = sess.run(m.cloned_action_logits_op,feed_dict=dic2_train)
-		      #pdb.set_trace()
-		      target = reward_train+m.rl_discount_factor*np.max(out_target,axis=-1)
-		      dic1_train[m.input_tensors['train']['target']] = target[:,np.newaxis]
-		      dic1_train[m.input_tensors['train']['action_one']] = action_train
-		      #dic1_train[m.input_tensors['train']['action']] = action_tmp[:,np.newaxis,:]
+                                  picked_pool_elem.append({})
+                                  for key, value in first_pool_elem[elemind].iteritems():
+                                    picked_pool_elem[elemind][key] = np.copy(first_pool_elem[elemind][key])
+                                picked_pool_elem.append(np.copy(first_pool_elem[2]))
+                                picked_pool_elem.append(np.copy(first_pool_elem[3]))
+                                picked_pool_elem.append(np.copy(first_pool_elem[4]))
+                                
+                                for pickind in range(m.batch_size-1):
+                                  pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
+                                  for elemind in range(2):
+                                    for key, value in pool_elem[elemind].iteritems():
+                                      if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0'): #and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
+                                        picked_pool_elem[elemind][key][pickind] = value[pickind]
+                                  picked_pool_elem[2][pickind] = pool_elem[2][pickind]
+                                  picked_pool_elem[3][pickind] = pool_elem[3][pickind]
+                                  picked_pool_elem[4][pickind] = pool_elem[4][pickind]
+	          	
+	                #prepare target (y) values 
+	                dic1_train = picked_pool_elem[0]
+	                dic2_train = picked_pool_elem[1]
+	                reward_train = picked_pool_elem[3]
+	                action_train = picked_pool_elem[2]
+                        discount_train = picked_pool_elem[4]
+	                #action_tmp = picked_pool_elem[0]
+	                #pdb.set_trace()
+	                out_target = sess.run(m.cloned_value_op,feed_dict=dic2_train)
+	                #pdb.set_trace()
+	                target = reward_train+discount_train*(out_target.reshape(m.batch_size))
+	                dic1_train[m.input_tensors['train']['target']] = target[:,np.newaxis]
+	                dic1_train[m.input_tensors['train']['action_one']] = action_train
+	                #dic1_train[m.input_tensors['train']['action']] = action_tmp[:,np.newaxis,:]
 
-		      if np.mod(n_step, train_display_interval) == 0:
-			total_loss, np_global_step, summary, print_summary = sess.run(
-			    [train_op, global_step, s_ops.summary_ops, s_ops.print_summary_ops],
-			    feed_dict=dic1_train)
-			logging.error("")
-		      else:
-			total_loss, np_global_step, summary = sess.run(
-			    [train_op, global_step, s_ops.summary_ops], feed_dict=dic1_train)
+	                if np.mod(n_step, train_display_interval) == 0:
+	          	  total_loss, np_global_step, summary, print_summary = sess.run(
+	          	    [train_op, global_step, s_ops.summary_ops, s_ops.print_summary_ops],
+	          	    feed_dict=dic1_train)
+	          	  logging.error("")
+	                else:
+	          	  total_loss, np_global_step, summary = sess.run(
+	          	    [train_op, global_step, s_ops.summary_ops], feed_dict=dic1_train)
 
-		      if writer is not None and summary is not None:
-			writer.add_summary(summary, np_global_step)
+	                if writer is not None and summary is not None:
+	          	  writer.add_summary(summary, np_global_step)
 
-                      #print 'np_global_step = '+str(np_global_step)
-                      if np.mod(np_global_step,m.rl_target_net_update_freq)==0:
-                        #print 'running copying ops'
-                        run_copying_ops(sess,m.copying_ops)
+                        #print 'np_global_step = '+str(np_global_step)
+                        if np.mod(np_global_step,m.rl_target_net_update_freq)==0:
+                          #print 'running copying ops'
+                          run_copying_ops(sess,m.copying_ops)
 
-	      else:
-		      total_loss = None
+	        else:
+	                total_loss = None
 
-	      should_stop = sess.run(m.should_stop_op)
-	      cur_state = next_state_tri
+	        should_stop = sess.run(m.should_stop_op)
+	        cur_state = next_state_tri
+                j = j+1
 
   else:
     #inference_test(sess,m.cloned_obj,m,None,dagger_sample_bn_false,rng_action,n_step)

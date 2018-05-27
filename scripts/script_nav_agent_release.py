@@ -346,6 +346,7 @@ def _setup_args(config_name, logdir):
 def clonemodel(m,m_cloned):
   namespace = "cloned"
   m.cloned_action_logits_op = m_cloned.action_logits_op
+  m.cloned_value_op = m_cloned.value_op
   m.cloned_namespace = namespace
 
 def set_copying_ops(m):

@@ -81,7 +81,7 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
 
 
 #Tri
-def rl_compute_losses_multi_or(logits, actions_one,target,
+def rl_compute_losses_multi_or(action_prob, value,  actions_one,target,
                             num_actions=-1, data_loss_wt=1., reg_loss_wt=1.,
                             reg_loss_op=None):
   assert(num_actions > 0), 'num_actions must be specified and must be > 0.'
@@ -90,26 +90,29 @@ def rl_compute_losses_multi_or(logits, actions_one,target,
     #if weights is None:
     #  weight = tf.ones_like(actions_one_hot, dtype=tf.float32, name='weight')
     
-    #actions_one_hot = tf.cast(tf.reshape(actions_one_hot, [-1, num_actions],
-    #                                     're_actions_one_hot'), tf.float32)
     #weights = tf.reduce_sum(tf.reshape(weights, [-1, num_actions], 're_weight'),
     #                        reduction_indices=1)
     #total = tf.reduce_sum(weights)
     #total = logits.shape[0]
-
-    #action_prob = tf.nn.softmax(logits)
-    #action_prob = tf.reduce_sum(tf.multiply(action_prob, actions_one_hot),
-    #                            reduction_indices=1)
-    #example_loss = -tf.log(tf.maximum(tf.constant(1e-4), action_prob))
-
     actions_one = tf.cast(tf.reshape(actions_one, [-1, 1],
                                          're_actions_one'), tf.int32)
+    actions_one_hot = tf.one_hot(actions_one,num_actions)
+
+    actions_one_hot = tf.cast(tf.reshape(actions_one_hot, [-1, num_actions],
+                                         're_actions_one_hot'), tf.float32)
+ 
+    #action_prob = tf.nn.softmax(logits)
+    action_prob = tf.reduce_sum(tf.multiply(action_prob, actions_one_hot),
+                                reduction_indices=1)
+    policy_loss = -tf.reduce_mean(tf.log(tf.maximum(tf.constant(1e-4), action_prob))*(target-value))
+    value_loss = tf.reduce_mean(tf.squared_difference(target,value))
+    data_loss_op = policy_loss + value_loss    
     
-    ind1 = tf.expand_dims(tf.range(tf.shape(actions_one)[0]),-1)
-    ind2 = actions_one
-    ind = tf.concat([ind1,ind2],axis=-1)
-    predicted = tf.gather_nd(logits,ind)
-    data_loss_op = tf.reduce_mean(tf.squared_difference(predicted,target)) 
+    #ind1 = tf.expand_dims(tf.range(tf.shape(actions_one)[0]),-1)
+    #ind2 = actions_one
+    #ind = tf.concat([ind1,ind2],axis=-1)
+    #predicted = tf.gather_nd(logits,ind)
+    #data_loss_op = tf.reduce_mean(tf.squared_difference(predicted,target)) 
 
     #data_loss_op = tf.reduce_sum(example_loss * weights) / total
     if reg_loss_op is None:

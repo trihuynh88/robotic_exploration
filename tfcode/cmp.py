@@ -374,6 +374,7 @@ def set_copying_ops(m):
   m.copying_ops = copying_ops
 
 def set_tmp_params(m):
+  m.rl_num_rollout = 50
   m.rl_num_explore_steps = 1000
   m.rl_num_explore_steps_test = 1000
   m.rl_datapool_size = 1000
@@ -824,6 +825,12 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
         num_pred=task_params.num_actions,
         batch_norm_param=batch_norm_param) 
     m.action_prob_op = tf.nn.softmax(m.action_logits_op)
+    #Tri
+    m.value_op, _ = tf_utils.fc_network(
+        m.value_features_op, neurons=args.arch.pred_neurons,
+        wt_decay=args.solver.wt_decay, name='value', offset=0,
+        num_pred=1,
+        batch_norm_param=batch_norm_param)
 
   init_state = tf.constant(0., dtype=tf.float32, shape=[
       1,1, map_crop_size, map_crop_size,
@@ -880,7 +887,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   #Tri
   if m.is_main:
     m.reg_loss_op, m.data_loss_op, m.total_loss_op = \
-      rl_compute_losses_multi_or(m.action_logits_op,
+      rl_compute_losses_multi_or(m.action_logits_op,m.value_op,
                               m.input_tensors['train']['action_one'],m.input_tensors['train']['target'],
                               num_actions=task_params.num_actions,
                               data_loss_wt=args.solver.data_loss_wt,
