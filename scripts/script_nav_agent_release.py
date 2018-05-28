@@ -380,7 +380,7 @@ def _train(args):
   #tmp setting TRI
   args.solver.max_steps = 500000
   args.solver.steps_per_decay = 50000
-  args.solver.initial_learning_rate = 1e-8
+  args.solver.initial_learning_rate = 1e-7
   args.navtask.task_params.batch_size = 32
 
   #pdb.set_trace()
@@ -394,6 +394,7 @@ def _train(args):
   #m.cloned_obj = R()
   m.batch_size = args.navtask.task_params.batch_size
   m.train_type = 1
+  m.usetarget = 0
   m.is_first_step = True
   m.save_pic_step = 10000
   m.save_pic_count = 0

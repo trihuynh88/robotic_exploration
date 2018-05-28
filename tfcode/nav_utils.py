@@ -106,7 +106,7 @@ def rl_compute_losses_multi_or(action_prob, value,  actions_one,target,
                                 reduction_indices=1)
     policy_loss = -tf.reduce_mean(tf.log(tf.maximum(tf.constant(1e-4), action_prob))*(target-value))
     value_loss = tf.reduce_mean(tf.squared_difference(target,value))
-    data_loss_op = policy_loss + value_loss    
+    data_loss_op = policy_loss + 0.5*value_loss    
     
     #ind1 = tf.expand_dims(tf.range(tf.shape(actions_one)[0]),-1)
     #ind2 = actions_one

@@ -489,8 +489,8 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  #dirpath = "test_maps_b32_lre8_decay50000_df099_exp100000_step1000_reusevars_noperturb_nogoal_traintype1_suffle"
-  dirpath = "test_maps_debug"
+  dirpath = "test_maps_b32_lre7_decay50000_df099_exp0_step1000_target0_reusevars_noperturb_nogoal_traintype1_suffle_a3c_0.5val"
+  #dirpath = "test_maps_debug"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
   n_step_str = ("%05d" % n_step)
@@ -575,7 +575,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 
 	  #update target network
 	  #if np.mod(n_step,m.rl_target_net_update_freq)==0:
-          if m.is_first_step:
+          if (m.usetarget and m.is_first_step):
             m.is_first_step = False
             print 'running first copying ops'
 	    run_copying_ops(sess,m.copying_ops)
@@ -793,7 +793,10 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
                         discount_train = picked_pool_elem[4]
 	                #action_tmp = picked_pool_elem[0]
 	                #pdb.set_trace()
-	                out_target = sess.run(m.cloned_value_op,feed_dict=dic2_train)
+                        if m.usetarget==1:
+	                  out_target = sess.run(m.cloned_value_op,feed_dict=dic2_train)
+                        else:
+                          out_target = sess.run(m.value_op,feed_dict=dic2_train)
 	                #pdb.set_trace()
 	                target = reward_train+discount_train*(out_target.reshape(m.batch_size))
 	                dic1_train[m.input_tensors['train']['target']] = target[:,np.newaxis]
@@ -813,7 +816,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 	          	  writer.add_summary(summary, np_global_step)
 
                         #print 'np_global_step = '+str(np_global_step)
-                        if np.mod(np_global_step,m.rl_target_net_update_freq)==0:
+                        if (m.usetarget and (np.mod(np_global_step,m.rl_target_net_update_freq)==0)):
                           #print 'running copying ops'
                           run_copying_ops(sess,m.copying_ops)
 
