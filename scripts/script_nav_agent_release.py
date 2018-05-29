@@ -393,6 +393,7 @@ def _train(args):
   #m.cloned_obj = R()
   m.batch_size = args.navtask.task_params.batch_size
   m.train_type = 1
+  m.suffle = False
   m.is_first_step = True
   m.save_pic_step = 10000
   m.save_pic_count = 0
@@ -428,6 +429,10 @@ def _train(args):
         set_copying_ops(m)
         m.init_op = tf.group(tf.global_variables_initializer(),
                          tf.local_variables_initializer())
+        m.saver_op = tf.train.Saver(keep_checkpoint_every_n_hours=6,
+                                write_version=tf.train.SaverDef.V2)
+        #with tf.Session() as sess:
+        #  sess.run(m.init_op)
         #pdb.set_trace()
         train_step_kwargs = args.setup_train_step_kwargs(
             m, R(), os.path.join(args.logdir, 'train'), rng_seed=args.solver.task,
@@ -453,7 +458,7 @@ def _train(args):
         #m.init_env_state2 = m.e2.reset(rng_data)
         m.rng_data = deepcopy(rng_data)
        
-        #pdb.set_trace() 
+        pdb.set_trace() 
         additional_args = {}
         final_loss = slim.learning.train(
             train_op=m.train_op,

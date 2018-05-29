@@ -381,7 +381,7 @@ def set_tmp_params(m):
   m.rl_discount_factor = 0.99
   m.rl_rand_act_prob_start = 1.0
   m.rl_rand_act_prob_end = 0.1
-  m.rl_rand_act_anneal_time = 100000
+  m.rl_rand_act_anneal_time = 50000
   m.rl_target_net_update_freq = 1000
   m.rl_replay_start_size = 100
 
@@ -941,12 +941,12 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     set_tmp_params(m)  
     
     #pdb.set_trace()
-    m.init_op = tf.group(tf.global_variables_initializer(),
-                         tf.local_variables_initializer())
+    #m.init_op = tf.group(tf.global_variables_initializer(),
+    #                     tf.local_variables_initializer())
   
     #pdb.set_trace()
-    m.saver_op = tf.train.Saver(keep_checkpoint_every_n_hours=4,
-                                write_version=tf.train.SaverDef.V2)#,var_list=slim.get_variables_to_restore(exclude=['cloned']))
+    #m.saver_op = tf.train.Saver(keep_checkpoint_every_n_hours=4,
+    #                            write_version=tf.train.SaverDef.V2)#,var_list=slim.get_variables_to_restore(exclude=['cloned']))
   
 
   return m

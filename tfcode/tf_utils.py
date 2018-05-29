@@ -489,7 +489,7 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  dirpath = "test_maps_b32_lre8_decay50000_df099_exp100000_step1000_reusevars_noperturb_nogoal_traintype1_suffle"
+  dirpath = "test_maps_b32_lre8_decay50000_df099_exp50000_step1000_reusevars_noperturb_nogoal_traintype1"
   #dirpath = "test_maps_debug"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
@@ -752,22 +752,25 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
                               #pdb.set_trace()
                               #picked_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
                               first_pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
-                              picked_pool_elem = []
-                              for elemind in range(2):
-                                picked_pool_elem.append({})
-                                for key, value in first_pool_elem[elemind].iteritems():
-                                  picked_pool_elem[elemind][key] = np.copy(first_pool_elem[elemind][key])
-                              picked_pool_elem.append(np.copy(first_pool_elem[2]))
-                              picked_pool_elem.append(np.copy(first_pool_elem[3]))
-                              
-                              for pickind in range(m.batch_size-1):
-                                pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
+                              if m.suffle:
+                                picked_pool_elem = []
                                 for elemind in range(2):
-                                  for key, value in pool_elem[elemind].iteritems():
-                                    if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0'): #and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
-                                      picked_pool_elem[elemind][key][pickind] = value[pickind]
-                                picked_pool_elem[2][pickind] = pool_elem[2][pickind]
-                                picked_pool_elem[3][pickind] = pool_elem[3][pickind]
+                                  picked_pool_elem.append({})
+                                  for key, value in first_pool_elem[elemind].iteritems():
+                                    picked_pool_elem[elemind][key] = np.copy(first_pool_elem[elemind][key])
+                                picked_pool_elem.append(np.copy(first_pool_elem[2]))
+                                picked_pool_elem.append(np.copy(first_pool_elem[3]))
+                                
+                                for pickind in range(m.batch_size-1):
+                                  pool_elem = m.rl_datapool[rd.randint(0,len(m.rl_datapool)-1)]
+                                  for elemind in range(2):
+                                    for key, value in pool_elem[elemind].iteritems():
+                                      if (key.name!='inputs/step_number:0' and key.name!='inputs/action_one:0' and key.name!='inputs/target:0' and key.name!='batch_norm_is_training_op:0'): #and key.name!='cloned/inputs/step_number:0' and key.name!='cloned/inputs/action_one:0' and key.name!='cloned/inputs/target:0' and key.name!='cloned/batch_norm_is_training_op:0'):
+                                        picked_pool_elem[elemind][key][pickind] = value[pickind]
+                                  picked_pool_elem[2][pickind] = pool_elem[2][pickind]
+                                  picked_pool_elem[3][pickind] = pool_elem[3][pickind]
+                              else:
+                                picked_pool_elem = first_pool_elem
 			
 		      #prepare target (y) values 
 		      dic1_train = picked_pool_elem[0]
