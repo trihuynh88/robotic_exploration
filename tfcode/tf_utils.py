@@ -336,12 +336,12 @@ def rl_sample_action(cur_eps, model_action, m):
   return action
 
 def rl_get_rand_fact(cur_step,m):
-  if cur_step<m.rl_replay_start_size:
+  if cur_step<m.rl_rand_act_anneal_start:
     return 1.0
-  if (cur_step>m.rl_rand_act_anneal_time):
+  if (cur_step>(m.rl_rand_act_anneal_start+m.rl_rand_act_anneal_time)):
     return m.rl_rand_act_prob_end
   else:
-    return m.rl_rand_act_prob_start+((cur_step-m.rl_replay_start_size)/m.rl_rand_act_anneal_time)*(m.rl_rand_act_prob_end-m.rl_rand_act_prob_start)
+    return m.rl_rand_act_prob_start+((cur_step-m.rl_rand_act_anneal_start)/m.rl_rand_act_anneal_time)*(m.rl_rand_act_prob_end-m.rl_rand_act_prob_start)
   
 def run_copying_ops(sess,copying_ops):
   for op in copying_ops:
@@ -445,7 +445,7 @@ def inference_test_elem(sess,m,writer,e,init_env_state,dagger_sample_bn_false,rn
 
       #n_step = sess.run(global_step)
       #cur_eps = rl_get_rand_fact(n_step,m)
-      #action_taken = rl_sample_action(cur_eps, action_tri, m)
+      #action_tri = rl_sample_action(1.1, action_tri, m)
       #action_taken = action_tri
       #pdb.set_trace()
       #next_state_tri, reward_tri = e.take_action_and_explore(states[j],action_taken)
@@ -489,8 +489,8 @@ def inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,n_step):
   #e2 = copy.deepcopy(m.e2)
   #init_env_state1 = copy.deepcopy(m.init_env_state1)
   #init_env_state2 = copy.deepcopy(m.init_env_state2)
-  dirpath = "test_maps_b32_lre8_decay50000_df099_exp50000_step1000_reusevars_noperturb_nogoal_traintype1"
-  #dirpath = "test_maps_debug"
+  dirpath = "test_maps_b32_lre8_decay50000_df099_exp50000_step1000_reusevars_noperturb_nogoal_traintype1_target100_rand50000_clip10"
+  #dirpath = "test_maps_random"
   if not os.path.exists(dirpath):
     os.makedirs(dirpath)
   n_step_str = ("%05d" % n_step)
@@ -556,6 +556,11 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       logging.info('XXXX: variable: %30s, is_any_nan: %5s, norm: %f.',
                    v[i].name, np.any(np.isnan(v_op_value[i])),
                    np.linalg.norm(v_op_value[i]))
+
+  #test random actions
+  #for rind in range(5):
+  #    inference_test(sess,obj,m,writer,dagger_sample_bn_false,rng_action,rind)
+  #quit()
 
   #pdb.set_trace()
   tt = utils.Timer()

@@ -458,7 +458,7 @@ def _train(args):
         #m.init_env_state2 = m.e2.reset(rng_data)
         m.rng_data = deepcopy(rng_data)
        
-        pdb.set_trace() 
+        #pdb.set_trace() 
         additional_args = {}
         final_loss = slim.learning.train(
             train_op=m.train_op,

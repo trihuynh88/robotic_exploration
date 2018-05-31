@@ -382,8 +382,9 @@ def set_tmp_params(m):
   m.rl_rand_act_prob_start = 1.0
   m.rl_rand_act_prob_end = 0.1
   m.rl_rand_act_anneal_time = 50000
-  m.rl_target_net_update_freq = 1000
+  m.rl_target_net_update_freq = 100
   m.rl_replay_start_size = 100
+  m.rl_rand_act_anneal_start = 50000
 
 def _inputs(problem):
   # Set up inputs.
